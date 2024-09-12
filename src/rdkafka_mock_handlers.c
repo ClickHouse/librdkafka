@@ -1461,10 +1461,10 @@ rd_kafka_mock_pid_new(rd_kafka_mock_cluster_t *mcluster,
                 memcpy(mpid->TransactionalId, TransactionalId->str, tidlen);
         mpid->TransactionalId[tidlen] = '\0';
 
-        mtx_lock(&mcluster->lock);
+        rdk_thread_mutex_lock(&mcluster->lock);
         rd_list_add(&mcluster->pids, mpid);
         ret = mpid->pid;
-        mtx_unlock(&mcluster->lock);
+        rdk_thread_mutex_unlock(&mcluster->lock);
 
         return ret;
 }
@@ -1510,12 +1510,12 @@ rd_kafka_mock_pid_check(rd_kafka_mock_cluster_t *mcluster,
         rd_kafka_mock_pid_t *mpid;
         rd_kafka_resp_err_t err = RD_KAFKA_RESP_ERR_NO_ERROR;
 
-        mtx_lock(&mcluster->lock);
+        rdk_thread_mutex_lock(&mcluster->lock);
         err =
             rd_kafka_mock_pid_find(mcluster, TransactionalId, check_pid, &mpid);
         if (!err && check_pid.epoch != mpid->pid.epoch)
                 err = RD_KAFKA_RESP_ERR_INVALID_PRODUCER_EPOCH;
-        mtx_unlock(&mcluster->lock);
+        rdk_thread_mutex_unlock(&mcluster->lock);
 
         if (unlikely(err))
                 rd_kafka_dbg(mcluster->rk, MOCK, "MOCK",
@@ -1540,22 +1540,22 @@ rd_kafka_mock_pid_bump(rd_kafka_mock_cluster_t *mcluster,
         rd_kafka_mock_pid_t *mpid;
         rd_kafka_resp_err_t err;
 
-        mtx_lock(&mcluster->lock);
+        rdk_thread_mutex_lock(&mcluster->lock);
         err = rd_kafka_mock_pid_find(mcluster, TransactionalId, *current_pid,
                                      &mpid);
         if (err) {
-                mtx_unlock(&mcluster->lock);
+                rdk_thread_mutex_unlock(&mcluster->lock);
                 return err;
         }
 
         if (current_pid->epoch != mpid->pid.epoch) {
-                mtx_unlock(&mcluster->lock);
+                rdk_thread_mutex_unlock(&mcluster->lock);
                 return RD_KAFKA_RESP_ERR_INVALID_PRODUCER_EPOCH;
         }
 
         mpid->pid.epoch++;
         *current_pid = mpid->pid;
-        mtx_unlock(&mcluster->lock);
+        rdk_thread_mutex_unlock(&mcluster->lock);
 
         rd_kafka_dbg(mcluster->rk, MOCK, "MOCK", "Bumped PID %s",
                      rd_kafka_pid2str(*current_pid));

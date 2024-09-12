@@ -66,13 +66,13 @@ static int run_polling_thread(void *p) {
 
 
 static void start_polling_thread(thrd_t *thrd, struct args *args) {
-  if (thrd_create(thrd, run_polling_thread, (void *)args) != thrd_success)
+  if (rdk_thread_create(thrd, run_polling_thread, (void *)args) != thrd_success)
     Test::Fail("Failed to create thread");
 }
 
 static void stop_polling_thread(thrd_t thrd, struct args *args) {
   int ret;
-  if (thrd_join(thrd, &ret) != thrd_success)
+  if (rdk_thread_join(thrd, &ret) != thrd_success)
     Test::Fail("Thread join failed");
 }
 

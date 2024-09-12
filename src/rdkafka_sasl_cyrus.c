@@ -222,9 +222,9 @@ static int rd_kafka_sasl_cyrus_kinit_refresh(rd_kafka_t *rk) {
 
         /* Prevent multiple simultaneous refreshes by the same process to
          * avoid Kerberos credential cache corruption. */
-        mtx_lock(&rd_kafka_sasl_cyrus_kinit_lock);
+        rdk_thread_mutex_lock(&rd_kafka_sasl_cyrus_kinit_lock);
         r = system(cmd);
-        mtx_unlock(&rd_kafka_sasl_cyrus_kinit_lock);
+        rdk_thread_mutex_unlock(&rd_kafka_sasl_cyrus_kinit_lock);
 
         duration = (int)((rd_clock() - ts_start) / 1000);
         if (duration > 5000)
@@ -668,7 +668,7 @@ void rd_kafka_sasl_cyrus_global_term(void) {
         /* NOTE: Should not be called since the application may be using SASL
          * too*/
         /* sasl_done(); */
-        mtx_destroy(&rd_kafka_sasl_cyrus_kinit_lock);
+        rdk_thread_mutex_destroy(&rd_kafka_sasl_cyrus_kinit_lock);
 }
 
 
@@ -678,7 +678,7 @@ void rd_kafka_sasl_cyrus_global_term(void) {
 int rd_kafka_sasl_cyrus_global_init(void) {
         int r;
 
-        mtx_init(&rd_kafka_sasl_cyrus_kinit_lock, mtx_plain);
+        rdk_thread_mutex_init(&rd_kafka_sasl_cyrus_kinit_lock, mtx_plain);
 
         r = sasl_client_init(NULL);
         if (r != SASL_OK) {

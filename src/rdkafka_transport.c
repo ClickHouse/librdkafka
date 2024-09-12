@@ -914,8 +914,8 @@ static int rd_kafka_transport_io_serve_win32(rd_kafka_transport_t *rktrans,
                                              int timeout_ms) {
         const DWORD wsaevent_cnt = 3;
         WSAEVENT wsaevents[3]    = {
-            rkq->rkq_cond.mEvents[0],  /* rkq: cnd_signal */
-            rkq->rkq_cond.mEvents[1],  /* rkq: cnd_broadcast */
+            rkq->rkq_cond.mEvents[0],  /* rkq: rdk_thread_cond_signal */
+            rkq->rkq_cond.mEvents[1],  /* rkq: rdk_thread_cond_broadcast */
             rktrans->rktrans_wsaevent, /* socket */
         };
         DWORD r;
@@ -937,17 +937,17 @@ static int rd_kafka_transport_io_serve_win32(rd_kafka_transport_t *rktrans,
         } else {
                 /* Check if the queue already has ops enqueued in which case we
                  * cut the timeout short. Else add this thread as waiting on the
-                 * queue's condvar so that cnd_signal() (et.al.) will perform
+                 * queue's condvar so that rdk_thread_cond_signal() (et.al.) will perform
                  * SetEvent() and thus wake up this thread in case a new op is
                  * added to the queue. */
-                mtx_lock(&rkq->rkq_lock);
+                rdk_thread_mutex_lock(&rkq->rkq_lock);
                 if (rkq->rkq_qlen > 0) {
                         timeout_ms = 0;
                 } else {
                         cnd_is_waiting = rd_true;
-                        cnd_wait_enter(&rkq->rkq_cond);
+                        rdk_thread_cond_wait_enter(&rkq->rkq_cond);
                 }
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
         }
 
         /* Wait for IO and queue events */
@@ -955,9 +955,9 @@ static int rd_kafka_transport_io_serve_win32(rd_kafka_transport_t *rktrans,
                                      FALSE);
 
         if (cnd_is_waiting) {
-                mtx_lock(&rkq->rkq_lock);
-                cnd_wait_exit(&rkq->rkq_cond);
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_lock(&rkq->rkq_lock);
+                rdk_thread_cond_wait_exit(&rkq->rkq_cond);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
         }
 
         if (unlikely(r == WSA_WAIT_FAILED)) {

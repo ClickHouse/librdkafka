@@ -651,19 +651,19 @@ rd_kafka_curr_msgs_add(rd_kafka_t *rk,
         if (rk->rk_type != RD_KAFKA_PRODUCER)
                 return RD_KAFKA_RESP_ERR_NO_ERROR;
 
-        mtx_lock(&rk->rk_curr_msgs.lock);
+        rdk_thread_mutex_lock(&rk->rk_curr_msgs.lock);
         while (unlikely(rk->rk_curr_msgs.cnt + cnt > rk->rk_curr_msgs.max_cnt ||
                         (unsigned long long)(rk->rk_curr_msgs.size + size) >
                             (unsigned long long)rk->rk_curr_msgs.max_size)) {
                 if (!block) {
-                        mtx_unlock(&rk->rk_curr_msgs.lock);
+                        rdk_thread_mutex_unlock(&rk->rk_curr_msgs.lock);
                         return RD_KAFKA_RESP_ERR__QUEUE_FULL;
                 }
 
                 if (rdlock)
                         rwlock_rdunlock(rdlock);
 
-                cnd_wait(&rk->rk_curr_msgs.cnd, &rk->rk_curr_msgs.lock);
+                rdk_thread_cond_wait(&rk->rk_curr_msgs.cnd, &rk->rk_curr_msgs.lock);
 
                 if (rdlock)
                         rwlock_rdlock(rdlock);
@@ -671,7 +671,7 @@ rd_kafka_curr_msgs_add(rd_kafka_t *rk,
 
         rk->rk_curr_msgs.cnt += cnt;
         rk->rk_curr_msgs.size += size;
-        mtx_unlock(&rk->rk_curr_msgs.lock);
+        rdk_thread_mutex_unlock(&rk->rk_curr_msgs.lock);
 
         return RD_KAFKA_RESP_ERR_NO_ERROR;
 }
@@ -689,7 +689,7 @@ rd_kafka_curr_msgs_sub(rd_kafka_t *rk, unsigned int cnt, size_t size) {
         if (rk->rk_type != RD_KAFKA_PRODUCER)
                 return;
 
-        mtx_lock(&rk->rk_curr_msgs.lock);
+        rdk_thread_mutex_lock(&rk->rk_curr_msgs.lock);
         rd_kafka_assert(NULL, rk->rk_curr_msgs.cnt >= cnt &&
                                   rk->rk_curr_msgs.size >= size);
 
@@ -706,9 +706,9 @@ rd_kafka_curr_msgs_sub(rd_kafka_t *rk, unsigned int cnt, size_t size) {
         rk->rk_curr_msgs.size -= size;
 
         if (unlikely(broadcast))
-                cnd_broadcast(&rk->rk_curr_msgs.cnd);
+                rdk_thread_cond_broadcast(&rk->rk_curr_msgs.cnd);
 
-        mtx_unlock(&rk->rk_curr_msgs.lock);
+        rdk_thread_mutex_unlock(&rk->rk_curr_msgs.lock);
 }
 
 static RD_INLINE RD_UNUSED void
@@ -719,10 +719,10 @@ rd_kafka_curr_msgs_get(rd_kafka_t *rk, unsigned int *cntp, size_t *sizep) {
                 return;
         }
 
-        mtx_lock(&rk->rk_curr_msgs.lock);
+        rdk_thread_mutex_lock(&rk->rk_curr_msgs.lock);
         *cntp  = rk->rk_curr_msgs.cnt;
         *sizep = rk->rk_curr_msgs.size;
-        mtx_unlock(&rk->rk_curr_msgs.lock);
+        rdk_thread_mutex_unlock(&rk->rk_curr_msgs.lock);
 }
 
 static RD_INLINE RD_UNUSED int rd_kafka_curr_msgs_cnt(rd_kafka_t *rk) {
@@ -730,9 +730,9 @@ static RD_INLINE RD_UNUSED int rd_kafka_curr_msgs_cnt(rd_kafka_t *rk) {
         if (rk->rk_type != RD_KAFKA_PRODUCER)
                 return 0;
 
-        mtx_lock(&rk->rk_curr_msgs.lock);
+        rdk_thread_mutex_lock(&rk->rk_curr_msgs.lock);
         cnt = rk->rk_curr_msgs.cnt;
-        mtx_unlock(&rk->rk_curr_msgs.lock);
+        rdk_thread_mutex_unlock(&rk->rk_curr_msgs.lock);
 
         return cnt;
 }
@@ -752,14 +752,14 @@ rd_kafka_curr_msgs_wait_zero(rd_kafka_t *rk,
 
         rd_timeout_init_timespec(&tspec, timeout_ms);
 
-        mtx_lock(&rk->rk_curr_msgs.lock);
+        rdk_thread_mutex_lock(&rk->rk_curr_msgs.lock);
         while ((cnt = rk->rk_curr_msgs.cnt) > 0) {
-                if (cnd_timedwait_abs(&rk->rk_curr_msgs.cnd,
+                if (rdk_thread_cond_timedwait_abs(&rk->rk_curr_msgs.cnd,
                                       &rk->rk_curr_msgs.lock,
                                       &tspec) == thrd_timedout)
                         break;
         }
-        mtx_unlock(&rk->rk_curr_msgs.lock);
+        rdk_thread_mutex_unlock(&rk->rk_curr_msgs.lock);
 
         *curr_msgsp = cnt;
         return cnt == 0;
@@ -882,9 +882,9 @@ void rd_kafka_log0(const rd_kafka_conf_t *conf,
 #define rd_rkb_log0(rkb, level, ctx, fac, ...)                                 \
         do {                                                                   \
                 char _logname[RD_KAFKA_NODENAME_SIZE];                         \
-                mtx_lock(&(rkb)->rkb_logname_lock);                            \
+                rdk_thread_mutex_lock(&(rkb)->rkb_logname_lock);                            \
                 rd_strlcpy(_logname, rkb->rkb_logname, sizeof(_logname));      \
-                mtx_unlock(&(rkb)->rkb_logname_lock);                          \
+                rdk_thread_mutex_unlock(&(rkb)->rkb_logname_lock);                          \
                 rd_kafka_log0(&(rkb)->rkb_rk->rk_conf, (rkb)->rkb_rk,          \
                               _logname, level, ctx, fac, __VA_ARGS__);         \
         } while (0)

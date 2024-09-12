@@ -131,13 +131,13 @@ rd_kafka_q_t *rd_kafka_q_new0(rd_kafka_t *rk, const char *func, int line);
 #define rd_kafka_q_new(rk) rd_kafka_q_new0(rk, __FUNCTION__, __LINE__)
 void rd_kafka_q_destroy_final(rd_kafka_q_t *rkq);
 
-#define rd_kafka_q_lock(rkqu)   mtx_lock(&(rkqu)->rkq_lock)
-#define rd_kafka_q_unlock(rkqu) mtx_unlock(&(rkqu)->rkq_lock)
+#define rd_kafka_q_lock(rkqu)   rdk_thread_mutex_lock(&(rkqu)->rkq_lock)
+#define rd_kafka_q_unlock(rkqu) rdk_thread_mutex_unlock(&(rkqu)->rkq_lock)
 
 static RD_INLINE RD_UNUSED rd_kafka_q_t *rd_kafka_q_keep(rd_kafka_q_t *rkq) {
-        mtx_lock(&rkq->rkq_lock);
+        rdk_thread_mutex_lock(&rkq->rkq_lock);
         rkq->rkq_refcnt++;
-        mtx_unlock(&rkq->rkq_lock);
+        rdk_thread_mutex_unlock(&rkq->rkq_lock);
         return rkq;
 }
 
@@ -161,12 +161,12 @@ static RD_INLINE RD_UNUSED const char *rd_kafka_q_name(rd_kafka_q_t *rkq) {
  */
 static RD_INLINE RD_UNUSED const char *rd_kafka_q_dest_name(rd_kafka_q_t *rkq) {
         const char *ret;
-        mtx_lock(&rkq->rkq_lock);
+        rdk_thread_mutex_lock(&rkq->rkq_lock);
         if (rkq->rkq_fwdq)
                 ret = rd_kafka_q_dest_name(rkq->rkq_fwdq);
         else
                 ret = rd_kafka_q_name(rkq);
-        mtx_unlock(&rkq->rkq_lock);
+        rdk_thread_mutex_unlock(&rkq->rkq_lock);
         return ret;
 }
 
@@ -177,10 +177,10 @@ static RD_INLINE RD_UNUSED const char *rd_kafka_q_dest_name(rd_kafka_q_t *rkq) {
 static RD_INLINE RD_UNUSED void rd_kafka_q_disable0(rd_kafka_q_t *rkq,
                                                     int do_lock) {
         if (do_lock)
-                mtx_lock(&rkq->rkq_lock);
+                rdk_thread_mutex_lock(&rkq->rkq_lock);
         rkq->rkq_flags &= ~RD_KAFKA_Q_F_READY;
         if (do_lock)
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
 }
 #define rd_kafka_q_disable(rkq) rd_kafka_q_disable0(rkq, 1 /*lock*/)
 
@@ -209,10 +209,10 @@ static RD_INLINE RD_UNUSED void rd_kafka_q_destroy0(rd_kafka_q_t *rkq,
                 rd_kafka_q_purge0(rkq, 1 /*lock*/);
         }
 
-        mtx_lock(&rkq->rkq_lock);
+        rdk_thread_mutex_lock(&rkq->rkq_lock);
         rd_kafka_assert(NULL, rkq->rkq_refcnt > 0);
         do_delete = !--rkq->rkq_refcnt;
-        mtx_unlock(&rkq->rkq_lock);
+        rdk_thread_mutex_unlock(&rkq->rkq_lock);
 
         if (unlikely(do_delete))
                 rd_kafka_q_destroy_final(rkq);
@@ -267,13 +267,13 @@ static RD_INLINE RD_UNUSED rd_kafka_q_t *rd_kafka_q_fwd_get(rd_kafka_q_t *rkq,
                                                             int do_lock) {
         rd_kafka_q_t *fwdq;
         if (do_lock)
-                mtx_lock(&rkq->rkq_lock);
+                rdk_thread_mutex_lock(&rkq->rkq_lock);
 
         if ((fwdq = rkq->rkq_fwdq))
                 rd_kafka_q_keep(fwdq);
 
         if (do_lock)
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
 
         return fwdq;
 }
@@ -286,9 +286,9 @@ static RD_INLINE RD_UNUSED rd_kafka_q_t *rd_kafka_q_fwd_get(rd_kafka_q_t *rkq,
  */
 static RD_INLINE RD_UNUSED int rd_kafka_q_is_fwded(rd_kafka_q_t *rkq) {
         int r;
-        mtx_lock(&rkq->rkq_lock);
+        rdk_thread_mutex_lock(&rkq->rkq_lock);
         r = rkq->rkq_fwdq ? 1 : 0;
-        mtx_unlock(&rkq->rkq_lock);
+        rdk_thread_mutex_unlock(&rkq->rkq_lock);
         return r;
 }
 
@@ -346,25 +346,25 @@ static RD_INLINE RD_UNUSED int rd_kafka_op_cmp_prio(const void *_a,
 static RD_INLINE RD_UNUSED void rd_kafka_q_yield(rd_kafka_q_t *rkq) {
         rd_kafka_q_t *fwdq;
 
-        mtx_lock(&rkq->rkq_lock);
+        rdk_thread_mutex_lock(&rkq->rkq_lock);
 
         rd_dassert(rkq->rkq_refcnt > 0);
 
         if (unlikely(!(rkq->rkq_flags & RD_KAFKA_Q_F_READY))) {
                 /* Queue has been disabled */
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
                 return;
         }
 
         if (!(fwdq = rd_kafka_q_fwd_get(rkq, 0))) {
                 rkq->rkq_flags |= RD_KAFKA_Q_F_YIELD;
-                cnd_broadcast(&rkq->rkq_cond);
+                rdk_thread_cond_broadcast(&rkq->rkq_cond);
                 if (rkq->rkq_qlen == 0)
                         rd_kafka_q_io_event(rkq);
 
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
         } else {
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
                 rd_kafka_q_yield(fwdq);
                 rd_kafka_q_destroy(fwdq);
         }
@@ -413,14 +413,14 @@ static RD_INLINE RD_UNUSED int rd_kafka_q_enq1(rd_kafka_q_t *rkq,
         rd_kafka_q_t *fwdq;
 
         if (do_lock)
-                mtx_lock(&rkq->rkq_lock);
+                rdk_thread_mutex_lock(&rkq->rkq_lock);
 
         rd_dassert(rkq->rkq_refcnt > 0);
 
         if (unlikely(!(rkq->rkq_flags & RD_KAFKA_Q_F_READY))) {
                 /* Queue has been disabled, reply to and fail the rko. */
                 if (do_lock)
-                        mtx_unlock(&rkq->rkq_lock);
+                        rdk_thread_mutex_unlock(&rkq->rkq_lock);
 
                 return rd_kafka_op_reply(rko, RD_KAFKA_RESP_ERR__DESTROY);
         }
@@ -434,15 +434,15 @@ static RD_INLINE RD_UNUSED int rd_kafka_q_enq1(rd_kafka_q_t *rkq,
                 }
 
                 rd_kafka_q_enq0(rkq, rko, at_head);
-                cnd_signal(&rkq->rkq_cond);
+                rdk_thread_cond_signal(&rkq->rkq_cond);
                 if (rkq->rkq_qlen == 1)
                         rd_kafka_q_io_event(rkq);
 
                 if (do_lock)
-                        mtx_unlock(&rkq->rkq_lock);
+                        rdk_thread_mutex_unlock(&rkq->rkq_lock);
         } else {
                 if (do_lock)
-                        mtx_unlock(&rkq->rkq_lock);
+                        rdk_thread_mutex_unlock(&rkq->rkq_lock);
                 rd_kafka_q_enq1(fwdq, rko, orig_destq, at_head, 1 /*do lock*/);
                 rd_kafka_q_destroy(fwdq);
         }
@@ -536,14 +536,14 @@ rd_kafka_q_concat0(rd_kafka_q_t *rkq, rd_kafka_q_t *srcq, int do_lock) {
                 return 0; /* Don't do anything if source queue is empty */
 
         if (do_lock)
-                mtx_lock(&rkq->rkq_lock);
+                rdk_thread_mutex_lock(&rkq->rkq_lock);
         if (!rkq->rkq_fwdq) {
                 rd_kafka_op_t *rko;
 
                 rd_dassert(TAILQ_EMPTY(&srcq->rkq_q) || srcq->rkq_qlen > 0);
                 if (unlikely(!(rkq->rkq_flags & RD_KAFKA_Q_F_READY))) {
                         if (do_lock)
-                                mtx_unlock(&rkq->rkq_lock);
+                                rdk_thread_mutex_unlock(&rkq->rkq_lock);
                         return -1;
                 }
                 /* First insert any prioritized ops from srcq
@@ -559,7 +559,7 @@ rd_kafka_q_concat0(rd_kafka_q_t *rkq, rd_kafka_q_t *srcq, int do_lock) {
                         rd_kafka_q_io_event(rkq);
                 rkq->rkq_qlen += srcq->rkq_qlen;
                 rkq->rkq_qsize += srcq->rkq_qsize;
-                cnd_signal(&rkq->rkq_cond);
+                rdk_thread_cond_signal(&rkq->rkq_cond);
 
                 rd_kafka_q_mark_served(srcq);
                 rd_kafka_q_reset(srcq);
@@ -567,7 +567,7 @@ rd_kafka_q_concat0(rd_kafka_q_t *rkq, rd_kafka_q_t *srcq, int do_lock) {
                 r = rd_kafka_q_concat0(rkq->rkq_fwdq ? rkq->rkq_fwdq : rkq,
                                        srcq, rkq->rkq_fwdq ? do_lock : 0);
         if (do_lock)
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
 
         return r;
 }
@@ -588,7 +588,7 @@ rd_kafka_q_concat0(rd_kafka_q_t *rkq, rd_kafka_q_t *srcq, int do_lock) {
 static RD_INLINE RD_UNUSED void
 rd_kafka_q_prepend0(rd_kafka_q_t *rkq, rd_kafka_q_t *srcq, int do_lock) {
         if (do_lock)
-                mtx_lock(&rkq->rkq_lock);
+                rdk_thread_mutex_lock(&rkq->rkq_lock);
         if (!rkq->rkq_fwdq && !srcq->rkq_fwdq) {
                 /* FIXME: prio-aware */
                 /* Concat rkq on srcq */
@@ -607,7 +607,7 @@ rd_kafka_q_prepend0(rd_kafka_q_t *rkq, rd_kafka_q_t *srcq, int do_lock) {
                                     srcq->rkq_fwdq ? srcq->rkq_fwdq : srcq,
                                     rkq->rkq_fwdq ? do_lock : 0);
         if (do_lock)
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
 }
 
 #define rd_kafka_q_prepend(dstq, srcq)                                         \
@@ -618,12 +618,12 @@ rd_kafka_q_prepend0(rd_kafka_q_t *rkq, rd_kafka_q_t *srcq, int do_lock) {
 static RD_INLINE RD_UNUSED int rd_kafka_q_len(rd_kafka_q_t *rkq) {
         int qlen;
         rd_kafka_q_t *fwdq;
-        mtx_lock(&rkq->rkq_lock);
+        rdk_thread_mutex_lock(&rkq->rkq_lock);
         if (!(fwdq = rd_kafka_q_fwd_get(rkq, 0))) {
                 qlen = rkq->rkq_qlen;
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
         } else {
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
                 qlen = rd_kafka_q_len(fwdq);
                 rd_kafka_q_destroy(fwdq);
         }
@@ -634,12 +634,12 @@ static RD_INLINE RD_UNUSED int rd_kafka_q_len(rd_kafka_q_t *rkq) {
 static RD_INLINE RD_UNUSED uint64_t rd_kafka_q_size(rd_kafka_q_t *rkq) {
         uint64_t sz;
         rd_kafka_q_t *fwdq;
-        mtx_lock(&rkq->rkq_lock);
+        rdk_thread_mutex_lock(&rkq->rkq_lock);
         if (!(fwdq = rd_kafka_q_fwd_get(rkq, 0))) {
                 sz = rkq->rkq_qsize;
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
         } else {
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
                 sz = rd_kafka_q_size(fwdq);
                 rd_kafka_q_destroy(fwdq);
         }
@@ -922,7 +922,7 @@ typedef struct rd_kafka_enq_once_s {
 static RD_INLINE RD_UNUSED rd_kafka_enq_once_t *
 rd_kafka_enq_once_new(rd_kafka_op_t *rko, rd_kafka_replyq_t replyq) {
         rd_kafka_enq_once_t *eonce = rd_calloc(1, sizeof(*eonce));
-        mtx_init(&eonce->lock, mtx_plain);
+        rdk_thread_mutex_init(&eonce->lock, mtx_plain);
         eonce->rko    = rko;
         eonce->replyq = replyq; /* struct copy */
         eonce->refcnt = 1;
@@ -939,11 +939,11 @@ static RD_INLINE RD_UNUSED void
 rd_kafka_enq_once_reenable(rd_kafka_enq_once_t *eonce,
                            rd_kafka_op_t *rko,
                            rd_kafka_replyq_t replyq) {
-        mtx_lock(&eonce->lock);
+        rdk_thread_mutex_lock(&eonce->lock);
         eonce->rko = rko;
         rd_kafka_replyq_destroy(&eonce->replyq);
         eonce->replyq = replyq; /* struct copy */
-        mtx_unlock(&eonce->lock);
+        rdk_thread_mutex_unlock(&eonce->lock);
 }
 
 
@@ -963,7 +963,7 @@ rd_kafka_enq_once_destroy0(rd_kafka_enq_once_t *eonce) {
 #endif
         rd_assert(eonce->refcnt == 0);
 
-        mtx_destroy(&eonce->lock);
+        rdk_thread_mutex_destroy(&eonce->lock);
         rd_free(eonce);
 }
 
@@ -976,9 +976,9 @@ rd_kafka_enq_once_destroy0(rd_kafka_enq_once_t *eonce) {
  */
 static RD_INLINE RD_UNUSED void
 rd_kafka_enq_once_add_source(rd_kafka_enq_once_t *eonce, const char *srcdesc) {
-        mtx_lock(&eonce->lock);
+        rdk_thread_mutex_lock(&eonce->lock);
         eonce->refcnt++;
-        mtx_unlock(&eonce->lock);
+        rdk_thread_mutex_unlock(&eonce->lock);
 }
 
 
@@ -997,11 +997,11 @@ static RD_INLINE RD_UNUSED void
 rd_kafka_enq_once_del_source(rd_kafka_enq_once_t *eonce, const char *srcdesc) {
         int do_destroy;
 
-        mtx_lock(&eonce->lock);
+        rdk_thread_mutex_lock(&eonce->lock);
         rd_assert(eonce->refcnt > 0);
         eonce->refcnt--;
         do_destroy = eonce->refcnt == 0;
-        mtx_unlock(&eonce->lock);
+        rdk_thread_mutex_unlock(&eonce->lock);
 
         if (do_destroy) {
                 /* We're the last refcount holder, clean up eonce. */
@@ -1033,7 +1033,7 @@ rd_kafka_enq_once_del_source_return(rd_kafka_enq_once_t *eonce,
         rd_bool_t do_destroy;
         rd_kafka_op_t *rko;
 
-        mtx_lock(&eonce->lock);
+        rdk_thread_mutex_lock(&eonce->lock);
 
         rd_assert(eonce->refcnt > 0);
         /* Owner must still hold a eonce reference, or the eonce must
@@ -1043,7 +1043,7 @@ rd_kafka_enq_once_del_source_return(rd_kafka_enq_once_t *eonce,
         do_destroy = eonce->refcnt == 0;
 
         rko = eonce->rko;
-        mtx_unlock(&eonce->lock);
+        rdk_thread_mutex_unlock(&eonce->lock);
 
         if (do_destroy) {
                 /* We're the last refcount holder, clean up eonce. */
@@ -1067,7 +1067,7 @@ rd_kafka_enq_once_trigger(rd_kafka_enq_once_t *eonce,
         rd_kafka_op_t *rko       = NULL;
         rd_kafka_replyq_t replyq = RD_ZERO_INIT;
 
-        mtx_lock(&eonce->lock);
+        rdk_thread_mutex_lock(&eonce->lock);
 
         rd_assert(eonce->refcnt > 0);
         eonce->refcnt--;
@@ -1088,7 +1088,7 @@ rd_kafka_enq_once_trigger(rd_kafka_enq_once_t *eonce,
 
                 /* Reply is enqueued at the end of this function */
         }
-        mtx_unlock(&eonce->lock);
+        rdk_thread_mutex_unlock(&eonce->lock);
 
         if (do_destroy) {
                 /* We're the last refcount holder, clean up eonce. */
@@ -1110,7 +1110,7 @@ static RD_INLINE RD_UNUSED void
 rd_kafka_enq_once_destroy(rd_kafka_enq_once_t *eonce) {
         int do_destroy;
 
-        mtx_lock(&eonce->lock);
+        rdk_thread_mutex_lock(&eonce->lock);
         rd_assert(eonce->refcnt > 0);
         eonce->refcnt--;
         do_destroy = eonce->refcnt == 0;
@@ -1118,7 +1118,7 @@ rd_kafka_enq_once_destroy(rd_kafka_enq_once_t *eonce) {
         eonce->rko = NULL;
         rd_kafka_replyq_destroy(&eonce->replyq);
 
-        mtx_unlock(&eonce->lock);
+        rdk_thread_mutex_unlock(&eonce->lock);
 
         if (do_destroy) {
                 /* We're the last refcount holder, clean up eonce. */
@@ -1144,7 +1144,7 @@ rd_kafka_enq_once_disable(rd_kafka_enq_once_t *eonce) {
         int do_destroy;
         rd_kafka_op_t *rko;
 
-        mtx_lock(&eonce->lock);
+        rdk_thread_mutex_lock(&eonce->lock);
         rd_assert(eonce->refcnt > 0);
         eonce->refcnt--;
         do_destroy = eonce->refcnt == 0;
@@ -1154,7 +1154,7 @@ rd_kafka_enq_once_disable(rd_kafka_enq_once_t *eonce) {
         eonce->rko = NULL;
         rd_kafka_replyq_destroy(&eonce->replyq);
 
-        mtx_unlock(&eonce->lock);
+        rdk_thread_mutex_unlock(&eonce->lock);
 
         if (do_destroy) {
                 /* We're the last refcount holder, clean up eonce. */

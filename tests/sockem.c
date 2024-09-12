@@ -65,15 +65,15 @@
 
 #include <pthread.h>
 typedef pthread_mutex_t mtx_t;
-#define mtx_init(M)    pthread_mutex_init(M, NULL)
-#define mtx_destroy(M) pthread_mutex_destroy(M)
-#define mtx_lock(M)    pthread_mutex_lock(M)
-#define mtx_unlock(M)  pthread_mutex_unlock(M)
+#define rdk_thread_mutex_init(M)    pthread_mutex_init(M, NULL)
+#define rdk_thread_mutex_destroy(M) pthread_mutex_destroy(M)
+#define rdk_thread_mutex_lock(M)    pthread_mutex_lock(M)
+#define rdk_thread_mutex_unlock(M)  pthread_mutex_unlock(M)
 
 typedef pthread_t thrd_t;
-#define thrd_create(THRD, START_ROUTINE, ARG)                                  \
+#define rdk_thread_create(THRD, START_ROUTINE, ARG)                                  \
         pthread_create(THRD, NULL, START_ROUTINE, ARG)
-#define thrd_join0(THRD) pthread_join(THRD, NULL)
+#define rdk_thread_join0(THRD) pthread_join(THRD, NULL)
 
 
 static mtx_t sockem_lock;
@@ -189,7 +189,7 @@ static __attribute__((unused)) __inline int64_t sockem_clock(void) {
  * @brief Initialize libsockem once.
  */
 static void sockem_init(void) {
-        mtx_init(&sockem_lock);
+        rdk_thread_mutex_init(&sockem_lock);
         sockem_conf_str = getenv("SOCKEM_CONF");
         if (!sockem_conf_str)
                 sockem_conf_str = "";
@@ -294,11 +294,11 @@ static int sockem_fwd_bufs(sockem_t *skm, int ofd) {
                 if (wr == 0)
                         break;
 
-                mtx_unlock(&skm->lock);
+                rdk_thread_mutex_unlock(&skm->lock);
 
                 r = send(ofd, sb->sb_data + sb->sb_of, wr, 0);
 
-                mtx_lock(&skm->lock);
+                rdk_thread_mutex_lock(&skm->lock);
 
                 if (r == -1) {
                         if (errno == ENOBUFS || errno == EAGAIN ||
@@ -406,12 +406,12 @@ static void *sockem_run(void *arg) {
         int ls;
         struct pollfd pfd[2];
 
-        mtx_lock(&skm->lock);
+        rdk_thread_mutex_lock(&skm->lock);
         if (skm->run == SOCKEM_START)
                 skm->run = SOCKEM_RUN;
         sockem_conf_use(skm);
         ls = skm->ls;
-        mtx_unlock(&skm->lock);
+        rdk_thread_mutex_unlock(&skm->lock);
 
         skm->recv_bufsz = skm->use.recv_bufsz;
         skm->recv_buf   = malloc(skm->recv_bufsz);
@@ -419,14 +419,14 @@ static void *sockem_run(void *arg) {
         /* Accept connection from sockfd in sockem_connect() */
         cs = accept(ls, NULL, 0);
         if (cs == -1) {
-                mtx_lock(&skm->lock);
+                rdk_thread_mutex_lock(&skm->lock);
                 if (skm->run == SOCKEM_TERM) {
                         /* App socket was closed. */
                         goto done;
                 }
                 fprintf(stderr, "%% sockem: accept(%d) failed: %s\n", ls,
                         strerror(socket_errno()));
-                mtx_unlock(&skm->lock);
+                rdk_thread_mutex_unlock(&skm->lock);
                 assert(cs != -1);
         }
 
@@ -435,34 +435,34 @@ static void *sockem_run(void *arg) {
         pfd[1].fd     = cs;
         pfd[1].events = POLLIN;
 
-        mtx_lock(&skm->lock);
+        rdk_thread_mutex_lock(&skm->lock);
         pfd[0].fd = skm->ps;
-        mtx_unlock(&skm->lock);
+        rdk_thread_mutex_unlock(&skm->lock);
         pfd[0].events = POLLIN;
 
         skm->poll_fd_cnt = 2;
 
-        mtx_lock(&skm->lock);
+        rdk_thread_mutex_lock(&skm->lock);
         while (skm->run == SOCKEM_RUN) {
                 int r;
                 int i;
                 int waittime = sockem_calc_waittime(skm, sockem_clock());
 
-                mtx_unlock(&skm->lock);
+                rdk_thread_mutex_unlock(&skm->lock);
                 r = poll(pfd, skm->poll_fd_cnt, waittime);
                 if (r == -1)
                         break;
 
                 /* Send/forward delayed buffers */
-                mtx_lock(&skm->lock);
+                rdk_thread_mutex_lock(&skm->lock);
                 sockem_conf_use(skm);
 
                 if (sockem_fwd_bufs(skm, skm->ps) == -1) {
-                        mtx_unlock(&skm->lock);
+                        rdk_thread_mutex_unlock(&skm->lock);
                         skm->run = SOCKEM_TERM;
                         break;
                 }
-                mtx_unlock(&skm->lock);
+                rdk_thread_mutex_unlock(&skm->lock);
 
                 for (i = 0; r > 0 && i < 2; i++) {
                         if (pfd[i].revents & (POLLHUP | POLLERR)) {
@@ -483,14 +483,14 @@ static void *sockem_run(void *arg) {
                         }
                 }
 
-                mtx_lock(&skm->lock);
+                rdk_thread_mutex_lock(&skm->lock);
         }
 done:
         if (cs != -1)
                 sockem_close0(cs);
         sockem_close_all(skm);
 
-        mtx_unlock(&skm->lock);
+        rdk_thread_mutex_unlock(&skm->lock);
         free(skm->recv_buf);
 
 
@@ -579,7 +579,7 @@ sockem_t *sockem_connect(int sockfd,
         skm->ps            = ps;
         skm->bufs_size_max = 16 * 1024 * 1024; /* 16kb of queue buffer */
         TAILQ_INIT(&skm->bufs);
-        mtx_init(&skm->lock);
+        rdk_thread_mutex_init(&skm->lock);
 
         /* Default config */
         skm->conf.rx_thruput = 1 << 30;
@@ -598,16 +598,16 @@ sockem_t *sockem_connect(int sockfd,
         }
         va_end(ap);
 
-        mtx_lock(&skm->lock);
+        rdk_thread_mutex_lock(&skm->lock);
         skm->run = SOCKEM_START;
 
         /* Create pipe thread */
-        if (thrd_create(&skm->thrd, sockem_run, skm) != 0) {
-                mtx_unlock(&skm->lock);
+        if (rdk_thread_create(&skm->thrd, sockem_run, skm) != 0) {
+                rdk_thread_mutex_unlock(&skm->lock);
                 sockem_close(skm);
                 return NULL;
         }
-        mtx_unlock(&skm->lock);
+        rdk_thread_mutex_unlock(&skm->lock);
 
         /* Connect application socket to listen socket */
         if (sockem_do_connect(sockfd, (struct sockaddr *)&sin6, addrlen2) ==
@@ -616,12 +616,12 @@ sockem_t *sockem_connect(int sockfd,
                 return NULL;
         }
 
-        mtx_lock(&sockem_lock);
+        rdk_thread_mutex_lock(&sockem_lock);
         LIST_INSERT_HEAD(&sockems, skm, link);
-        mtx_lock(&skm->lock);
+        rdk_thread_mutex_lock(&skm->lock);
         skm->linked = 1;
-        mtx_unlock(&skm->lock);
-        mtx_unlock(&sockem_lock);
+        rdk_thread_mutex_unlock(&skm->lock);
+        rdk_thread_mutex_unlock(&sockem_lock);
 
         return skm;
 }
@@ -639,11 +639,11 @@ static void sockem_bufs_purge(sockem_t *skm) {
 
 
 void sockem_close(sockem_t *skm) {
-        mtx_lock(&sockem_lock);
-        mtx_lock(&skm->lock);
+        rdk_thread_mutex_lock(&sockem_lock);
+        rdk_thread_mutex_lock(&skm->lock);
         if (skm->linked)
                 LIST_REMOVE(skm, link);
-        mtx_unlock(&sockem_lock);
+        rdk_thread_mutex_unlock(&sockem_lock);
 
         /* If thread is running let it close the sockets
          * to avoid race condition. */
@@ -652,13 +652,13 @@ void sockem_close(sockem_t *skm) {
         else
                 sockem_close_all(skm);
 
-        mtx_unlock(&skm->lock);
+        rdk_thread_mutex_unlock(&skm->lock);
 
-        thrd_join0(skm->thrd);
+        rdk_thread_join0(skm->thrd);
 
         sockem_bufs_purge(skm);
 
-        mtx_destroy(&skm->lock);
+        rdk_thread_mutex_destroy(&skm->lock);
 
 
         free(skm);
@@ -717,15 +717,15 @@ static int sockem_vset(sockem_t *skm, va_list ap) {
         const char *key;
         int val;
 
-        mtx_lock(&skm->lock);
+        rdk_thread_mutex_lock(&skm->lock);
         while ((key = va_arg(ap, const char *))) {
                 val = va_arg(ap, int);
                 if (sockem_set0(skm, key, val) == -1) {
-                        mtx_unlock(&skm->lock);
+                        rdk_thread_mutex_unlock(&skm->lock);
                         return -1;
                 }
         }
-        mtx_unlock(&skm->lock);
+        rdk_thread_mutex_unlock(&skm->lock);
 
         return 0;
 }
@@ -747,11 +747,11 @@ sockem_t *sockem_find(int sockfd) {
 
         pthread_once(&sockem_once, sockem_init);
 
-        mtx_lock(&sockem_lock);
+        rdk_thread_mutex_lock(&sockem_lock);
         LIST_FOREACH(skm, &sockems, link)
         if (skm->as == sockfd)
                 break;
-        mtx_unlock(&sockem_lock);
+        rdk_thread_mutex_unlock(&sockem_lock);
 
         return skm;
 }
@@ -788,12 +788,12 @@ int close(int fd) {
 
         pthread_once(&sockem_once, sockem_init);
 
-        mtx_lock(&sockem_lock);
+        rdk_thread_mutex_lock(&sockem_lock);
         skm = sockem_find(fd);
 
         if (skm)
                 sockem_close(skm);
-        mtx_unlock(&sockem_lock);
+        rdk_thread_mutex_unlock(&sockem_lock);
 
         return sockem_close0(fd);
 }

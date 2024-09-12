@@ -55,7 +55,7 @@ static RD_INLINE rd_bool_t rd_kafka_q_check_yield(rd_kafka_q_t *rkq) {
  */
 void rd_kafka_q_destroy_final(rd_kafka_q_t *rkq) {
 
-        mtx_lock(&rkq->rkq_lock);
+        rdk_thread_mutex_lock(&rkq->rkq_lock);
         if (unlikely(rkq->rkq_qio != NULL)) {
                 rd_free(rkq->rkq_qio);
                 rkq->rkq_qio = NULL;
@@ -68,9 +68,9 @@ void rd_kafka_q_destroy_final(rd_kafka_q_t *rkq) {
         rd_kafka_q_fwd_set0(rkq, NULL, 0 /*no-lock*/, 0 /*no-fwd-app*/);
         rd_kafka_q_purge0(rkq, 0 /*no-lock*/);
         assert(!rkq->rkq_fwdq);
-        mtx_unlock(&rkq->rkq_lock);
-        mtx_destroy(&rkq->rkq_lock);
-        cnd_destroy(&rkq->rkq_cond);
+        rdk_thread_mutex_unlock(&rkq->rkq_lock);
+        rdk_thread_mutex_destroy(&rkq->rkq_lock);
+        rdk_thread_cond_destroy(&rkq->rkq_cond);
 
         if (rkq->rkq_flags & RD_KAFKA_Q_F_ALLOCATED)
                 rd_free(rkq);
@@ -93,8 +93,8 @@ void rd_kafka_q_init0(rd_kafka_q_t *rkq,
         rkq->rkq_qio    = NULL;
         rkq->rkq_serve  = NULL;
         rkq->rkq_opaque = NULL;
-        mtx_init(&rkq->rkq_lock, mtx_plain);
-        cnd_init(&rkq->rkq_cond);
+        rdk_thread_mutex_init(&rkq->rkq_lock, mtx_plain);
+        rdk_thread_cond_init(&rkq->rkq_cond);
 #if ENABLE_DEVEL
         rd_snprintf(rkq->rkq_name, sizeof(rkq->rkq_name), "%s:%d", func, line);
 #else
@@ -134,7 +134,7 @@ void rd_kafka_q_fwd_set0(rd_kafka_q_t *srcq,
                 return;
 
         if (do_lock)
-                mtx_lock(&srcq->rkq_lock);
+                rdk_thread_mutex_lock(&srcq->rkq_lock);
         if (fwd_app)
                 srcq->rkq_flags |= RD_KAFKA_Q_F_FWD_APP;
         if (srcq->rkq_fwdq) {
@@ -154,7 +154,7 @@ void rd_kafka_q_fwd_set0(rd_kafka_q_t *srcq,
                 srcq->rkq_fwdq = destq;
         }
         if (do_lock)
-                mtx_unlock(&srcq->rkq_lock);
+                rdk_thread_mutex_unlock(&srcq->rkq_lock);
 }
 
 /**
@@ -167,11 +167,11 @@ int rd_kafka_q_purge0(rd_kafka_q_t *rkq, int do_lock) {
         int cnt = 0;
 
         if (do_lock)
-                mtx_lock(&rkq->rkq_lock);
+                rdk_thread_mutex_lock(&rkq->rkq_lock);
 
         if ((fwdq = rd_kafka_q_fwd_get(rkq, 0))) {
                 if (do_lock)
-                        mtx_unlock(&rkq->rkq_lock);
+                        rdk_thread_mutex_unlock(&rkq->rkq_lock);
                 cnt = rd_kafka_q_purge(fwdq);
                 rd_kafka_q_destroy(fwdq);
                 return cnt;
@@ -187,7 +187,7 @@ int rd_kafka_q_purge0(rd_kafka_q_t *rkq, int do_lock) {
         rd_kafka_q_reset(rkq);
 
         if (do_lock)
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
 
         /* Destroy the ops */
         next = TAILQ_FIRST(&tmpq);
@@ -215,10 +215,10 @@ void rd_kafka_q_purge_toppar_version(rd_kafka_q_t *rkq,
         int64_t size = 0;
         rd_kafka_q_t *fwdq;
 
-        mtx_lock(&rkq->rkq_lock);
+        rdk_thread_mutex_lock(&rkq->rkq_lock);
 
         if ((fwdq = rd_kafka_q_fwd_get(rkq, 0))) {
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
                 rd_kafka_q_purge_toppar_version(fwdq, rktp, version);
                 rd_kafka_q_destroy(fwdq);
                 return;
@@ -238,7 +238,7 @@ void rd_kafka_q_purge_toppar_version(rd_kafka_q_t *rkq,
 
         rkq->rkq_qlen -= cnt;
         rkq->rkq_qsize -= size;
-        mtx_unlock(&rkq->rkq_lock);
+        rdk_thread_mutex_unlock(&rkq->rkq_lock);
 
         next = TAILQ_FIRST(&tmpq);
         while ((rko = next)) {
@@ -261,8 +261,8 @@ int rd_kafka_q_move_cnt(rd_kafka_q_t *dstq,
         int mcnt = 0;
 
         if (do_locks) {
-                mtx_lock(&srcq->rkq_lock);
-                mtx_lock(&dstq->rkq_lock);
+                rdk_thread_mutex_lock(&srcq->rkq_lock);
+                rdk_thread_mutex_lock(&dstq->rkq_lock);
         }
 
         if (!dstq->rkq_fwdq && !srcq->rkq_fwdq) {
@@ -302,8 +302,8 @@ int rd_kafka_q_move_cnt(rd_kafka_q_t *dstq,
                     srcq->rkq_fwdq ? srcq->rkq_fwdq : srcq, cnt, do_locks);
 
         if (do_locks) {
-                mtx_unlock(&dstq->rkq_lock);
-                mtx_unlock(&srcq->rkq_lock);
+                rdk_thread_mutex_unlock(&dstq->rkq_lock);
+                rdk_thread_mutex_unlock(&srcq->rkq_lock);
         }
 
         return mcnt;
@@ -355,7 +355,7 @@ rd_kafka_op_t *rd_kafka_q_pop_serve(rd_kafka_q_t *rkq,
 
         rd_dassert(cb_type);
 
-        mtx_lock(&rkq->rkq_lock);
+        rdk_thread_mutex_lock(&rkq->rkq_lock);
 
         rd_kafka_yield_thread = 0;
         if (!(fwdq = rd_kafka_q_fwd_get(rkq, 0))) {
@@ -383,7 +383,7 @@ rd_kafka_op_t *rd_kafka_q_pop_serve(rd_kafka_q_t *rkq,
 
                                 /* Let op_handle() operate without lock
                                  * held to allow re-enqueuing, etc. */
-                                mtx_unlock(&rkq->rkq_lock);
+                                rdk_thread_mutex_unlock(&rkq->rkq_lock);
                                 is_locked = rd_false;
 
                                 /* Ops with callbacks are considered handled
@@ -395,7 +395,7 @@ rd_kafka_op_t *rd_kafka_q_pop_serve(rd_kafka_q_t *rkq,
 
                                 if (res == RD_KAFKA_OP_RES_HANDLED ||
                                     res == RD_KAFKA_OP_RES_KEEP) {
-                                        mtx_lock(&rkq->rkq_lock);
+                                        rdk_thread_mutex_lock(&rkq->rkq_lock);
                                         is_locked = rd_true;
                                         goto retry; /* Next op */
                                 } else if (unlikely(res ==
@@ -408,16 +408,16 @@ rd_kafka_op_t *rd_kafka_q_pop_serve(rd_kafka_q_t *rkq,
 
                         if (unlikely(rd_kafka_q_check_yield(rkq))) {
                                 if (is_locked)
-                                        mtx_unlock(&rkq->rkq_lock);
+                                        rdk_thread_mutex_unlock(&rkq->rkq_lock);
                                 return NULL;
                         }
 
                         if (!is_locked)
-                                mtx_lock(&rkq->rkq_lock);
+                                rdk_thread_mutex_lock(&rkq->rkq_lock);
 
-                        if (cnd_timedwait_abs(&rkq->rkq_cond, &rkq->rkq_lock,
+                        if (rdk_thread_cond_timedwait_abs(&rkq->rkq_cond, &rkq->rkq_lock,
                                               &timeout_tspec) != thrd_success) {
-                                mtx_unlock(&rkq->rkq_lock);
+                                rdk_thread_mutex_unlock(&rkq->rkq_lock);
                                 return NULL;
                         }
                 }
@@ -425,7 +425,7 @@ rd_kafka_op_t *rd_kafka_q_pop_serve(rd_kafka_q_t *rkq,
         } else {
                 /* Since the q_pop may block we need to release the parent
                  * queue's lock. */
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
                 rko = rd_kafka_q_pop_serve(fwdq, timeout_us, version, cb_type,
                                            callback, opaque);
                 rd_kafka_q_destroy(fwdq);
@@ -466,14 +466,14 @@ int rd_kafka_q_serve(rd_kafka_q_t *rkq,
 
         rd_dassert(cb_type);
 
-        mtx_lock(&rkq->rkq_lock);
+        rdk_thread_mutex_lock(&rkq->rkq_lock);
 
         rd_dassert(TAILQ_EMPTY(&rkq->rkq_q) || rkq->rkq_qlen > 0);
         if ((fwdq = rd_kafka_q_fwd_get(rkq, 0))) {
                 int ret;
                 /* Since the q_pop may block we need to release the parent
                  * queue's lock. */
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
                 ret = rd_kafka_q_serve(fwdq, timeout_ms, max_cnt, cb_type,
                                        callback, opaque);
                 rd_kafka_q_destroy(fwdq);
@@ -485,14 +485,14 @@ int rd_kafka_q_serve(rd_kafka_q_t *rkq,
         /* Wait for op */
         while (!(rko = TAILQ_FIRST(&rkq->rkq_q)) &&
                !rd_kafka_q_check_yield(rkq) &&
-               cnd_timedwait_abs(&rkq->rkq_cond, &rkq->rkq_lock,
+               rdk_thread_cond_timedwait_abs(&rkq->rkq_cond, &rkq->rkq_lock,
                                  &timeout_tspec) == thrd_success)
                 ;
 
         rd_kafka_q_mark_served(rkq);
 
         if (!rko) {
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
                 return 0;
         }
 
@@ -501,7 +501,7 @@ int rd_kafka_q_serve(rd_kafka_q_t *rkq,
         rd_kafka_q_move_cnt(&localq, rkq, max_cnt == 0 ? -1 /*all*/ : max_cnt,
                             0 /*no-locks*/);
 
-        mtx_unlock(&rkq->rkq_lock);
+        rdk_thread_mutex_unlock(&rkq->rkq_lock);
 
         rd_kafka_yield_thread = 0;
 
@@ -580,17 +580,17 @@ int rd_kafka_q_serve_rkmessages(rd_kafka_q_t *rkq,
         rd_kafka_q_t *fwdq;
         struct timespec timeout_tspec;
 
-        mtx_lock(&rkq->rkq_lock);
+        rdk_thread_mutex_lock(&rkq->rkq_lock);
         if ((fwdq = rd_kafka_q_fwd_get(rkq, 0))) {
                 /* Since the q_pop may block we need to release the parent
                  * queue's lock. */
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
                 cnt = rd_kafka_q_serve_rkmessages(fwdq, timeout_ms, rkmessages,
                                                   rkmessages_size);
                 rd_kafka_q_destroy(fwdq);
                 return cnt;
         }
-        mtx_unlock(&rkq->rkq_lock);
+        rdk_thread_mutex_unlock(&rkq->rkq_lock);
 
         if (timeout_ms)
                 rd_kafka_app_poll_blocking(rk);
@@ -601,24 +601,24 @@ int rd_kafka_q_serve_rkmessages(rd_kafka_q_t *rkq,
         while (cnt < rkmessages_size) {
                 rd_kafka_op_res_t res;
 
-                mtx_lock(&rkq->rkq_lock);
+                rdk_thread_mutex_lock(&rkq->rkq_lock);
 
                 while (!(rko = TAILQ_FIRST(&rkq->rkq_q)) &&
                        !rd_kafka_q_check_yield(rkq) &&
-                       cnd_timedwait_abs(&rkq->rkq_cond, &rkq->rkq_lock,
+                       rdk_thread_cond_timedwait_abs(&rkq->rkq_cond, &rkq->rkq_lock,
                                          &timeout_tspec) == thrd_success)
                         ;
 
                 rd_kafka_q_mark_served(rkq);
 
                 if (!rko) {
-                        mtx_unlock(&rkq->rkq_lock);
+                        rdk_thread_mutex_unlock(&rkq->rkq_lock);
                         break; /* Timed out */
                 }
 
                 rd_kafka_q_deq0(rkq, rko);
 
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
 
                 if (rd_kafka_op_version_outdated(rko, 0)) {
                         /* Outdated op, put on discard queue */
@@ -814,7 +814,7 @@ void rd_kafka_q_io_event_enable(rd_kafka_q_t *rkq,
                 memcpy(qio->payload, payload, size);
         }
 
-        mtx_lock(&rkq->rkq_lock);
+        rdk_thread_mutex_lock(&rkq->rkq_lock);
         if (rkq->rkq_qio) {
                 rd_free(rkq->rkq_qio);
                 rkq->rkq_qio = NULL;
@@ -824,7 +824,7 @@ void rd_kafka_q_io_event_enable(rd_kafka_q_t *rkq,
                 rkq->rkq_qio = qio;
         }
 
-        mtx_unlock(&rkq->rkq_lock);
+        rdk_thread_mutex_unlock(&rkq->rkq_lock);
 }
 
 void rd_kafka_queue_io_event_enable(rd_kafka_queue_t *rkqu,
@@ -857,7 +857,7 @@ void rd_kafka_q_cb_event_enable(rd_kafka_q_t *rkq,
                 qio->event_cb_opaque = opaque;
         }
 
-        mtx_lock(&rkq->rkq_lock);
+        rdk_thread_mutex_lock(&rkq->rkq_lock);
         if (rkq->rkq_qio) {
                 rd_free(rkq->rkq_qio);
                 rkq->rkq_qio = NULL;
@@ -867,7 +867,7 @@ void rd_kafka_q_cb_event_enable(rd_kafka_q_t *rkq,
                 rkq->rkq_qio = qio;
         }
 
-        mtx_unlock(&rkq->rkq_lock);
+        rdk_thread_mutex_unlock(&rkq->rkq_lock);
 }
 
 void rd_kafka_queue_cb_event_enable(rd_kafka_queue_t *rkqu,
@@ -917,9 +917,9 @@ int rd_kafka_q_apply(rd_kafka_q_t *rkq,
         rd_kafka_q_t *fwdq;
         int cnt = 0;
 
-        mtx_lock(&rkq->rkq_lock);
+        rdk_thread_mutex_lock(&rkq->rkq_lock);
         if ((fwdq = rd_kafka_q_fwd_get(rkq, 0))) {
-                mtx_unlock(&rkq->rkq_lock);
+                rdk_thread_mutex_unlock(&rkq->rkq_lock);
                 cnt = rd_kafka_q_apply(fwdq, callback, opaque);
                 rd_kafka_q_destroy(fwdq);
                 return cnt;
@@ -933,7 +933,7 @@ int rd_kafka_q_apply(rd_kafka_q_t *rkq,
 
         rd_kafka_q_mark_served(rkq);
 
-        mtx_unlock(&rkq->rkq_lock);
+        rdk_thread_mutex_unlock(&rkq->rkq_lock);
 
         return cnt;
 }
@@ -985,7 +985,7 @@ void rd_kafka_q_fix_offsets(rd_kafka_q_t *rkq,
  * @brief Print information and contents of queue
  */
 void rd_kafka_q_dump(FILE *fp, rd_kafka_q_t *rkq) {
-        mtx_lock(&rkq->rkq_lock);
+        rdk_thread_mutex_lock(&rkq->rkq_lock);
         fprintf(fp,
                 "Queue %p \"%s\" (refcnt %d, flags 0x%x, %d ops, "
                 "%" PRId64 " bytes)\n",
@@ -1026,7 +1026,7 @@ void rd_kafka_q_dump(FILE *fp, rd_kafka_q_t *rkq) {
                 }
         }
 
-        mtx_unlock(&rkq->rkq_lock);
+        rdk_thread_mutex_unlock(&rkq->rkq_lock);
 }
 
 

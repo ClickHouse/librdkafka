@@ -60,14 +60,14 @@ int thrd_is_current(thrd_t thr) {
 
 
 #ifdef _WIN32
-void cnd_wait_enter(cnd_t *cond) {
+void rdk_thread_cond_wait_enter(cnd_t *cond) {
         /* Increment number of waiters */
         EnterCriticalSection(&cond->mWaitersCountLock);
         ++cond->mWaitersCount;
         LeaveCriticalSection(&cond->mWaitersCountLock);
 }
 
-void cnd_wait_exit(cnd_t *cond) {
+void rdk_thread_cond_wait_exit(cnd_t *cond) {
         /* Increment number of waiters */
         EnterCriticalSection(&cond->mWaitersCountLock);
         --cond->mWaitersCount;
@@ -77,11 +77,11 @@ void cnd_wait_exit(cnd_t *cond) {
 
 
 
-int cnd_timedwait_ms(cnd_t *cnd, mtx_t *mtx, int timeout_ms) {
+int rdk_thread_cond_timedwait_ms(cnd_t *cnd, mtx_t *mtx, int timeout_ms) {
         if (timeout_ms == -1 /* INFINITE*/)
-                return cnd_wait(cnd, mtx);
+                return rdk_thread_cond_wait(cnd, mtx);
 #if defined(_TTHREAD_WIN32_)
-        return _cnd_timedwait_win32(cnd, mtx, (DWORD)timeout_ms);
+        return _rdk_thread_cond_timedwait_win32(cnd, mtx, (DWORD)timeout_ms);
 #else
         struct timeval tv;
         struct timespec ts;
@@ -98,14 +98,14 @@ int cnd_timedwait_ms(cnd_t *cnd, mtx_t *mtx, int timeout_ms) {
                 ts.tv_nsec -= 1000000000;
         }
 
-        return cnd_timedwait(cnd, mtx, &ts);
+        return rdk_thread_cond_timedwait(cnd, mtx, &ts);
 #endif
 }
 
-int cnd_timedwait_msp(cnd_t *cnd, mtx_t *mtx, int *timeout_msp) {
+int rdk_thread_cond_timedwait_msp(cnd_t *cnd, mtx_t *mtx, int *timeout_msp) {
         rd_ts_t pre = rd_clock();
         int r;
-        r = cnd_timedwait_ms(cnd, mtx, *timeout_msp);
+        r = rdk_thread_cond_timedwait_ms(cnd, mtx, *timeout_msp);
         if (r != thrd_timedout) {
                 /* Subtract spent time */
                 (*timeout_msp) -= (int)(rd_clock() - pre) / 1000;
@@ -113,13 +113,13 @@ int cnd_timedwait_msp(cnd_t *cnd, mtx_t *mtx, int *timeout_msp) {
         return r;
 }
 
-int cnd_timedwait_abs(cnd_t *cnd, mtx_t *mtx, const struct timespec *tspec) {
+int rdk_thread_cond_timedwait_abs(cnd_t *cnd, mtx_t *mtx, const struct timespec *tspec) {
         if (tspec->tv_sec == RD_POLL_INFINITE)
-                return cnd_wait(cnd, mtx);
+                return rdk_thread_cond_wait(cnd, mtx);
         else if (tspec->tv_sec == RD_POLL_NOWAIT)
                 return thrd_timedout;
 
-        return cnd_timedwait(cnd, mtx, tspec);
+        return rdk_thread_cond_timedwait(cnd, mtx, tspec);
 }
 
 

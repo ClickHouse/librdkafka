@@ -157,15 +157,15 @@ static void consumer_close_queue(rd_kafka_t *c) {
         int ret;
 
         /* Spin up poller thread */
-        if (thrd_create(&thrd, poller_thread_main, (void *)&args) !=
+        if (rdk_thread_create(&thrd, poller_thread_main, (void *)&args) !=
             thrd_success)
                 TEST_FAIL("Failed to create thread");
 
         TEST_SAY("Closing consumer %s using queue\n", rd_kafka_name(c));
         TEST_CALL_ERROR__(rd_kafka_consumer_close_queue(c, queue));
 
-        if (thrd_join(thrd, &ret) != thrd_success)
-                TEST_FAIL("thrd_join failed");
+        if (rdk_thread_join(thrd, &ret) != thrd_success)
+                TEST_FAIL("rdk_thread_join failed");
 
         rd_kafka_queue_destroy(queue);
 }

@@ -1701,7 +1701,7 @@ void rd_kafka_msgbatch_ready_produce(rd_kafka_msgbatch_t *rkmb) {
  * to wake up the reader (broker thread) when there's a new message added.
  * This wakeup is done thru a combination of cndvar signalling and IO writes
  * to make sure a thread wakeup is triggered regardless if the broker thread
- * is blocking on cnd_timedwait() or on IO poll.
+ * is blocking on rdk_thread_cond_timedwait() or on IO poll.
  * When the broker thread is woken up it will scan all the partitions it is
  * the leader for to check if there are messages to be sent - all according
  * to the configured batch size and linger.ms - and then decide its next

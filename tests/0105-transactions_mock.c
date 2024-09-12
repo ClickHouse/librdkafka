@@ -2835,7 +2835,7 @@ static void do_test_disconnected_group_coord(rd_bool_t switch_coord) {
         state.mcluster     = mcluster;
         state.grpid        = grpid;
         state.broker_id    = switch_coord ? 3 : 2;
-        thrd_create(&thrd, delayed_up_cb, &state);
+        rdk_thread_create(&thrd, delayed_up_cb, &state);
 
         TEST_SAY("Calling send_offsets_to_transaction()\n");
         offsets = rd_kafka_topic_partition_list_new(1);
@@ -2850,7 +2850,7 @@ static void do_test_disconnected_group_coord(rd_bool_t switch_coord) {
 
         rd_kafka_consumer_group_metadata_destroy(cgmetadata);
         rd_kafka_topic_partition_list_destroy(offsets);
-        thrd_join(thrd, &ret);
+        rdk_thread_join(thrd, &ret);
 
         /* Commit the transaction */
         TIMING_START(&timing, "commit_transaction(-1)");

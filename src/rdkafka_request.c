@@ -1946,9 +1946,9 @@ rd_kafka_resp_err_t rd_kafka_MetadataRequest(rd_kafka_broker_t *rkb,
                  * Forced requests (app using metadata() API) are passed
                  * through regardless. */
 
-                mtx_lock(&rkb->rkb_rk->rk_metadata_cache.rkmc_full_lock);
+                rdk_thread_mutex_lock(&rkb->rkb_rk->rk_metadata_cache.rkmc_full_lock);
                 if (*full_incr > 0 && (!rko || !rko->rko_u.metadata.force)) {
-                        mtx_unlock(
+                        rdk_thread_mutex_unlock(
                             &rkb->rkb_rk->rk_metadata_cache.rkmc_full_lock);
                         rd_rkb_dbg(rkb, METADATA, "METADATA",
                                    "Skipping metadata request: %s: "
@@ -1959,7 +1959,7 @@ rd_kafka_resp_err_t rd_kafka_MetadataRequest(rd_kafka_broker_t *rkb,
                 }
 
                 (*full_incr)++;
-                mtx_unlock(&rkb->rkb_rk->rk_metadata_cache.rkmc_full_lock);
+                rdk_thread_mutex_unlock(&rkb->rkb_rk->rk_metadata_cache.rkmc_full_lock);
                 rkbuf->rkbuf_u.Metadata.decr = full_incr;
                 rkbuf->rkbuf_u.Metadata.decr_lock =
                     &rkb->rkb_rk->rk_metadata_cache.rkmc_full_lock;

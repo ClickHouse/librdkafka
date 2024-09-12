@@ -121,10 +121,10 @@ int rd_kafka_background_thread_main(void *arg) {
         rd_kafka_wrlock(rk);
         rd_kafka_wrunlock(rk);
 
-        mtx_lock(&rk->rk_init_lock);
+        rdk_thread_mutex_lock(&rk->rk_init_lock);
         rk->rk_init_wait_cnt--;
-        cnd_broadcast(&rk->rk_init_cnd);
-        mtx_unlock(&rk->rk_init_lock);
+        rdk_thread_cond_broadcast(&rk->rk_init_cnd);
+        rdk_thread_mutex_unlock(&rk->rk_init_lock);
 
         while (likely(!rd_kafka_terminating(rk))) {
                 rd_kafka_q_serve(rk->rk_background.q, 10 * 1000, 0,
@@ -172,7 +172,7 @@ rd_kafka_resp_err_t rd_kafka_background_thread_create(rd_kafka_t *rk,
 
         rk->rk_background.q = rd_kafka_q_new(rk);
 
-        mtx_lock(&rk->rk_init_lock);
+        rdk_thread_mutex_lock(&rk->rk_init_lock);
         rk->rk_init_wait_cnt++;
 
 #ifndef _WIN32
@@ -192,7 +192,7 @@ rd_kafka_resp_err_t rd_kafka_background_thread_create(rd_kafka_t *rk,
 #endif
 
 
-        if ((thrd_create(&rk->rk_background.thread,
+        if ((rdk_thread_create(&rk->rk_background.thread,
                          rd_kafka_background_thread_main, rk)) !=
             thrd_success) {
                 rd_snprintf(errstr, errstr_size,
@@ -201,7 +201,7 @@ rd_kafka_resp_err_t rd_kafka_background_thread_create(rd_kafka_t *rk,
                 rd_kafka_q_destroy_owner(rk->rk_background.q);
                 rk->rk_background.q = NULL;
                 rk->rk_init_wait_cnt--;
-                mtx_unlock(&rk->rk_init_lock);
+                rdk_thread_mutex_unlock(&rk->rk_init_lock);
 
 #ifndef _WIN32
                 /* Restore sigmask of caller */
@@ -210,7 +210,7 @@ rd_kafka_resp_err_t rd_kafka_background_thread_create(rd_kafka_t *rk,
                 return RD_KAFKA_RESP_ERR__CRIT_SYS_RESOURCE;
         }
 
-        mtx_unlock(&rk->rk_init_lock);
+        rdk_thread_mutex_unlock(&rk->rk_init_lock);
 
 #ifndef _WIN32
         /* Restore sigmask of caller */
