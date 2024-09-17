@@ -1544,7 +1544,7 @@ rd_kafka_mock_next_request_error (rd_kafka_mock_connection_t *mconn,
         rd_kafka_mock_error_stack_t *errstack;
         rd_kafka_mock_error_rtt_t err_rtt;
 
-        mtx_lock(&mcluster->lock);
+        rdk_thread_mutex_lock(&mcluster->lock);
 
         errstack = rd_kafka_mock_error_stack_find(&mconn->broker->errstacks,
                                                   resp->rkbuf_reqhdr.ApiKey);
@@ -1553,7 +1553,7 @@ rd_kafka_mock_next_request_error (rd_kafka_mock_connection_t *mconn,
                         &mcluster->errstacks,
                         resp->rkbuf_reqhdr.ApiKey);
                 if (likely(!errstack)) {
-                        mtx_unlock(&mcluster->lock);
+                        rdk_thread_mutex_unlock(&mcluster->lock);
                         return RD_KAFKA_RESP_ERR_NO_ERROR;
                 }
         }
@@ -1561,7 +1561,7 @@ rd_kafka_mock_next_request_error (rd_kafka_mock_connection_t *mconn,
         err_rtt = rd_kafka_mock_error_stack_next(errstack);
         resp->rkbuf_ts_sent = err_rtt.rtt;
 
-        mtx_unlock(&mcluster->lock);
+        rdk_thread_mutex_unlock(&mcluster->lock);
 
         /* If the error is ERR__TRANSPORT (a librdkafka-specific error code
          * that will never be returned by a broker), we close the connection.
@@ -1591,13 +1591,13 @@ void rd_kafka_mock_clear_request_errors (rd_kafka_mock_cluster_t *mcluster,
                                          int16_t ApiKey) {
         rd_kafka_mock_error_stack_t *errstack;
 
-        mtx_lock(&mcluster->lock);
+        rdk_thread_mutex_lock(&mcluster->lock);
 
         errstack = rd_kafka_mock_error_stack_find(&mcluster->errstacks, ApiKey);
         if (errstack)
                 errstack->cnt = 0;
 
-        mtx_unlock(&mcluster->lock);
+        rdk_thread_mutex_unlock(&mcluster->lock);
 }
 
 
@@ -1609,7 +1609,7 @@ rd_kafka_mock_push_request_errors_array (rd_kafka_mock_cluster_t *mcluster,
         rd_kafka_mock_error_stack_t *errstack;
         size_t totcnt;
 
-        mtx_lock(&mcluster->lock);
+        rdk_thread_mutex_lock(&mcluster->lock);
 
         errstack = rd_kafka_mock_error_stack_get(&mcluster->errstacks, ApiKey);
 
@@ -1627,7 +1627,7 @@ rd_kafka_mock_push_request_errors_array (rd_kafka_mock_cluster_t *mcluster,
                 errstack->errs[errstack->cnt++].rtt = 0;
         }
 
-        mtx_unlock(&mcluster->lock);
+        rdk_thread_mutex_unlock(&mcluster->lock);
 }
 
 void rd_kafka_mock_push_request_errors (rd_kafka_mock_cluster_t *mcluster,
@@ -1653,10 +1653,10 @@ rd_kafka_mock_broker_push_request_error_rtts (rd_kafka_mock_cluster_t *mcluster,
         rd_kafka_mock_error_stack_t *errstack;
         size_t totcnt;
 
-        mtx_lock(&mcluster->lock);
+        rdk_thread_mutex_lock(&mcluster->lock);
 
         if (!(mrkb = rd_kafka_mock_broker_find(mcluster, broker_id))) {
-                mtx_unlock(&mcluster->lock);
+                rdk_thread_mutex_unlock(&mcluster->lock);
                 return RD_KAFKA_RESP_ERR__UNKNOWN_BROKER;
         }
 
@@ -1680,7 +1680,7 @@ rd_kafka_mock_broker_push_request_error_rtts (rd_kafka_mock_cluster_t *mcluster,
         }
         va_end(ap);
 
-        mtx_unlock(&mcluster->lock);
+        rdk_thread_mutex_unlock(&mcluster->lock);
 
         return RD_KAFKA_RESP_ERR_NO_ERROR;
 }
@@ -2090,7 +2090,7 @@ rd_kafka_mock_cluster_destroy0 (rd_kafka_mock_cluster_t *mcluster) {
 
         rd_kafka_broker_destroy(mcluster->dummy_rkb);
 
-        if (thrd_join(dummy_rkb_thread, &ret) != thrd_success)
+        if (rdk_thread_join(dummy_rkb_thread, &ret) != thrd_success)
                 rd_assert(!*"failed to join mock dummy broker thread");
 
 
@@ -2103,7 +2103,7 @@ rd_kafka_mock_cluster_destroy0 (rd_kafka_mock_cluster_t *mcluster) {
                 rd_free(mcluster->handlers);
         }
 
-        mtx_destroy(&mcluster->lock);
+        rdk_thread_mutex_destroy(&mcluster->lock);
 
         rd_free(mcluster->bootstraps);
 
@@ -2127,7 +2127,7 @@ void rd_kafka_mock_cluster_destroy (rd_kafka_mock_cluster_t *mcluster) {
         if (rko)
                 rd_kafka_op_destroy(rko);
 
-        if (thrd_join(mcluster->thread, &res) != thrd_success)
+        if (rdk_thread_join(mcluster->thread, &res) != thrd_success)
                 rd_assert(!*"failed to join mock thread");
 
         rd_free(mcluster);
@@ -2165,7 +2165,7 @@ rd_kafka_mock_cluster_t *rd_kafka_mock_cluster_new (rd_kafka_t *rk,
                 bootstraps_len += strlen(mrkb->advertised_listener) + 6 + 1;
         }
 
-        mtx_init(&mcluster->lock, mtx_plain);
+        rdk_thread_mutex_init(&mcluster->lock, mtx_plain);
 
         TAILQ_INIT(&mcluster->topics);
         mcluster->defaults.partition_cnt = 4;
@@ -2202,7 +2202,7 @@ rd_kafka_mock_cluster_t *rd_kafka_mock_cluster_new (rd_kafka_t *rk,
         }
 
 
-        if (thrd_create(&mcluster->thread,
+        if (rdk_thread_create(&mcluster->thread,
                         rd_kafka_mock_cluster_thread_main, mcluster) !=
             thrd_success) {
                 rd_kafka_log(rk, LOG_CRIT, "MOCK",
