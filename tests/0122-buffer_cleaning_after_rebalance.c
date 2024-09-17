@@ -175,14 +175,14 @@ static void do_test_consume_batch (const char *strategy) {
         c1_args.testid = testid;
         c1_args.mv = &mv;
         c1_args.test = test_curr;
-        if (thrd_create(&thread_id, consumer_batch_queue, &c1_args)
+        if (rdk_thread_create(&thread_id, consumer_batch_queue, &c1_args)
             != thrd_success)
                 TEST_FAIL("Failed to create thread for %s", "C1.PRE");
 
         test_consumer_subscribe(c2, topic);
         test_consumer_wait_assignment(c2, rd_false);
 
-        thrd_join(thread_id, NULL);
+        rdk_thread_join(thread_id, NULL);
 
         /* Create generic consume queue */
         rkq2 = rd_kafka_queue_get_consumer(c2);

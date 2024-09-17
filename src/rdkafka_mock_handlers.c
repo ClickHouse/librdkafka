@@ -1471,10 +1471,10 @@ rd_kafka_mock_pid_new (rd_kafka_mock_cluster_t *mcluster) {
         pid->id = rd_jitter(1, 900000) * 1000;
         pid->epoch = 0;
 
-        mtx_lock(&mcluster->lock);
+        rdk_thread_mutex_lock(&mcluster->lock);
         rd_list_add(&mcluster->pids, pid);
         ret = *pid;
-        mtx_unlock(&mcluster->lock);
+        rdk_thread_mutex_unlock(&mcluster->lock);
 
         return ret;
 }
@@ -1489,14 +1489,14 @@ rd_kafka_mock_pid_check (rd_kafka_mock_cluster_t *mcluster,
         const rd_kafka_pid_t *pid;
         rd_kafka_resp_err_t err = RD_KAFKA_RESP_ERR_NO_ERROR;
 
-        mtx_lock(&mcluster->lock);
+        rdk_thread_mutex_lock(&mcluster->lock);
         pid = rd_list_find(&mcluster->pids, &check_pid, rd_kafka_pid_cmp_pid);
 
         if (!pid)
                 err = RD_KAFKA_RESP_ERR_UNKNOWN_PRODUCER_ID;
         else if (check_pid.epoch != pid->epoch)
                 err = RD_KAFKA_RESP_ERR_INVALID_PRODUCER_EPOCH;
-        mtx_unlock(&mcluster->lock);
+        rdk_thread_mutex_unlock(&mcluster->lock);
 
         return err;
 }
@@ -1511,21 +1511,21 @@ rd_kafka_mock_pid_bump (rd_kafka_mock_cluster_t *mcluster,
                         rd_kafka_pid_t *current_pid) {
         rd_kafka_pid_t *pid;
 
-        mtx_lock(&mcluster->lock);
+        rdk_thread_mutex_lock(&mcluster->lock);
         pid = rd_list_find(&mcluster->pids, current_pid, rd_kafka_pid_cmp_pid);
         if (!pid) {
-                mtx_unlock(&mcluster->lock);
+                rdk_thread_mutex_unlock(&mcluster->lock);
                 return RD_KAFKA_RESP_ERR_UNKNOWN_PRODUCER_ID;
         }
 
         if (current_pid->epoch != pid->epoch) {
-                mtx_unlock(&mcluster->lock);
+                rdk_thread_mutex_unlock(&mcluster->lock);
                 return RD_KAFKA_RESP_ERR_INVALID_PRODUCER_EPOCH;
         }
 
         pid->epoch++;
         *current_pid = *pid;
-        mtx_unlock(&mcluster->lock);
+        rdk_thread_mutex_unlock(&mcluster->lock);
 
         rd_kafka_dbg(mcluster->rk, MOCK, "MOCK",
                      "Bumped PID %s", rd_kafka_pid2str(*current_pid));

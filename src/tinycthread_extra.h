@@ -57,23 +57,23 @@ int thrd_is_current(thrd_t thr);
 
 
 /**
- * @brief Same as cnd_timedwait() but takes a relative timeout in milliseconds.
+ * @brief Same as rdk_thread_cond_timedwait() but takes a relative timeout in milliseconds.
  */
-int cnd_timedwait_ms(cnd_t *cnd, mtx_t *mtx, int timeout_ms);
+int rdk_thread_cond_timedwait_ms(cnd_t *cnd, mtx_t *mtx, int timeout_ms);
 
 /**
- * @brief Same as cnd_timedwait_ms() but updates the remaining time.
+ * @brief Same as rdk_thread_cond_timedwait_ms() but updates the remaining time.
 */
-int cnd_timedwait_msp (cnd_t *cnd, mtx_t *mtx, int *timeout_msp);
+int rdk_thread_cond_timedwait_msp (cnd_t *cnd, mtx_t *mtx, int *timeout_msp);
 
 /**
- * @brief Same as cnd_timedwait() but honours
- *        RD_POLL_INFINITE (uses cnd_wait()),
+ * @brief Same as rdk_thread_cond_timedwait() but honours
+ *        RD_POLL_INFINITE (uses rdk_thread_cond_wait()),
  *        and RD_POLL_NOWAIT (return thrd_timedout immediately).
  *
  *  @remark Set up \p tspec with rd_timeout_init_timespec().
  */
-int cnd_timedwait_abs (cnd_t *cnd, mtx_t *mtx, const struct timespec *tspec);
+int rdk_thread_cond_timedwait_abs (cnd_t *cnd, mtx_t *mtx, const struct timespec *tspec);
 
 
 

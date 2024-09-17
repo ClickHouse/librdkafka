@@ -566,9 +566,9 @@ static void rd_kafka_txn_partition_registered (rd_kafka_toppar_t *rktp) {
 
         rd_kafka_toppar_unlock(rktp);
 
-        mtx_lock(&rk->rk_eos.txn_pending_lock);
+        rdk_thread_mutex_lock(&rk->rk_eos.txn_pending_lock);
         TAILQ_REMOVE(&rk->rk_eos.txn_waitresp_rktps, rktp, rktp_txnlink);
-        mtx_unlock(&rk->rk_eos.txn_pending_lock);
+        rdk_thread_mutex_unlock(&rk->rk_eos.txn_pending_lock);
 
         /* Not destroy()/keep():ing rktp since it just changes tailq. */
 
@@ -825,12 +825,12 @@ static void rd_kafka_txn_handle_AddPartitionsToTxn (rd_kafka_t *rk,
          * If this request was successful there will be no remaining partitions
          * on the waitresp list.
          */
-        mtx_lock(&rk->rk_eos.txn_pending_lock);
+        rdk_thread_mutex_lock(&rk->rk_eos.txn_pending_lock);
         TAILQ_CONCAT_SORTED(&rk->rk_eos.txn_pending_rktps,
                             &rk->rk_eos.txn_waitresp_rktps,
                             rd_kafka_toppar_t *, rktp_txnlink,
                             rd_kafka_toppar_topic_cmp);
-        mtx_unlock(&rk->rk_eos.txn_pending_lock);
+        rdk_thread_mutex_unlock(&rk->rk_eos.txn_pending_lock);
 
         err = rd_kafka_txn_normalize_err(err);
 
@@ -901,16 +901,16 @@ static void rd_kafka_txn_register_partitions (rd_kafka_t *rk) {
                 return;
         }
 
-        mtx_lock(&rk->rk_eos.txn_pending_lock);
+        rdk_thread_mutex_lock(&rk->rk_eos.txn_pending_lock);
         if (TAILQ_EMPTY(&rk->rk_eos.txn_pending_rktps)) {
                 /* No pending partitions to register */
-                mtx_unlock(&rk->rk_eos.txn_pending_lock);
+                rdk_thread_mutex_unlock(&rk->rk_eos.txn_pending_lock);
                 return;
         }
 
         if (!TAILQ_EMPTY(&rk->rk_eos.txn_waitresp_rktps)) {
                 /* Only allow one outstanding AddPartitionsToTxnRequest */
-                mtx_unlock(&rk->rk_eos.txn_pending_lock);
+                rdk_thread_mutex_unlock(&rk->rk_eos.txn_pending_lock);
                 rd_kafka_dbg(rk, EOS, "ADDPARTS",
                              "Not registering partitions: waiting for "
                              "previous AddPartitionsToTxn request to complete");
@@ -919,7 +919,7 @@ static void rd_kafka_txn_register_partitions (rd_kafka_t *rk) {
 
         /* Require valid pid */
         if (unlikely(!rd_kafka_pid_valid(pid))) {
-                mtx_unlock(&rk->rk_eos.txn_pending_lock);
+                rdk_thread_mutex_unlock(&rk->rk_eos.txn_pending_lock);
                 rd_kafka_dbg(rk, EOS, "ADDPARTS",
                              "Not registering partitions: "
                              "No PID available (idempotence state %s)",
@@ -939,7 +939,7 @@ static void rd_kafka_txn_register_partitions (rd_kafka_t *rk) {
                 RD_KAFKA_REPLYQ(rk->rk_ops, 0),
                 rd_kafka_txn_handle_AddPartitionsToTxn, NULL);
         if (err) {
-                mtx_unlock(&rk->rk_eos.txn_pending_lock);
+                rdk_thread_mutex_unlock(&rk->rk_eos.txn_pending_lock);
                 rd_kafka_dbg(rk, EOS, "ADDPARTS",
                              "Not registering partitions: %s", errstr);
                 return;
@@ -951,7 +951,7 @@ static void rd_kafka_txn_register_partitions (rd_kafka_t *rk) {
                      &rk->rk_eos.txn_pending_rktps,
                      rktp_txnlink);
 
-        mtx_unlock(&rk->rk_eos.txn_pending_lock);
+        rdk_thread_mutex_unlock(&rk->rk_eos.txn_pending_lock);
 
         rk->rk_eos.txn_req_cnt++;
 
@@ -2628,9 +2628,9 @@ rd_kafka_txn_op_begin_abort (rd_kafka_t *rk,
         rd_kafka_wrunlock(rk);
 
         if (clear_pending) {
-                mtx_lock(&rk->rk_eos.txn_pending_lock);
+                rdk_thread_mutex_lock(&rk->rk_eos.txn_pending_lock);
                 rd_kafka_txn_clear_pending_partitions(rk);
-                mtx_unlock(&rk->rk_eos.txn_pending_lock);
+                rdk_thread_mutex_unlock(&rk->rk_eos.txn_pending_lock);
         }
 
         rd_kafka_txn_curr_api_reply_error(rd_kafka_q_keep(rko->rko_replyq.q),
@@ -3248,10 +3248,10 @@ void rd_kafka_txns_term (rd_kafka_t *rk) {
         rd_kafka_broker_destroy(rk->rk_eos.txn_coord);
         rk->rk_eos.txn_coord = NULL;
 
-        mtx_lock(&rk->rk_eos.txn_pending_lock);
+        rdk_thread_mutex_lock(&rk->rk_eos.txn_pending_lock);
         rd_kafka_txn_clear_pending_partitions(rk);
-        mtx_unlock(&rk->rk_eos.txn_pending_lock);
-        mtx_destroy(&rk->rk_eos.txn_pending_lock);
+        rdk_thread_mutex_unlock(&rk->rk_eos.txn_pending_lock);
+        rdk_thread_mutex_destroy(&rk->rk_eos.txn_pending_lock);
 
         rd_kafka_txn_clear_partitions(rk);
 }
@@ -3265,7 +3265,7 @@ void rd_kafka_txns_term (rd_kafka_t *rk) {
  */
 void rd_kafka_txns_init (rd_kafka_t *rk) {
         rd_atomic32_init(&rk->rk_eos.txn_may_enq, 0);
-        mtx_init(&rk->rk_eos.txn_pending_lock, mtx_plain);
+        rdk_thread_mutex_init(&rk->rk_eos.txn_pending_lock, mtx_plain);
         TAILQ_INIT(&rk->rk_eos.txn_pending_rktps);
         TAILQ_INIT(&rk->rk_eos.txn_waitresp_rktps);
         TAILQ_INIT(&rk->rk_eos.txn_rktps);
