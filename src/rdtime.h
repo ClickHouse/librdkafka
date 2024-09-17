@@ -184,7 +184,7 @@ static RD_INLINE rd_ts_t rd_timeout_init (int timeout_ms) {
  * @brief Initialize an absolute timespec timeout based on the provided
  *        relative \p timeout_us.
  *
- * To be used with cnd_timedwait_abs().
+ * To be used with rdk_thread_cond_timedwait_abs().
  *
  * Honours RD_POLL_INFITE and RD_POLL_NOWAIT (reflected in tspec.tv_sec).
  */
@@ -215,7 +215,7 @@ static RD_INLINE void rd_timeout_init_timespec_us (struct timespec *tspec,
  * @brief Initialize an absolute timespec timeout based on the provided
  *        relative \p timeout_ms.
  *
- * To be used with cnd_timedwait_abs().
+ * To be used with rdk_thread_cond_timedwait_abs().
  *
  * Honours RD_POLL_INFITE and RD_POLL_NOWAIT (reflected in tspec.tv_sec).
  */
