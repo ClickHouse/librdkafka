@@ -18,6 +18,7 @@ https://github.com/confluentinc/librdkafka/compare/master...ClickHouse:librdkafk
 * https://github.com/confluentinc/librdkafka/pull/4982
 * https://github.com/confluentinc/librdkafka/pull/4788
 * https://github.com/confluentinc/librdkafka/pull/5089
+* https://github.com/confluentinc/librdkafka/pull/5266
 
 ### Fixes done earlier
 
@@ -103,4 +104,7 @@ git cherry-pick f979784bd38ff8023bbac87aefdb9ea421ad7744 # Fix data race when a 
 
 git fetch confluentinc refs/pull/5089/head
 git cherry-pick 5c185854404abf506d520042f61818d93d96cc91 # Fix data race in timers
+
+git fetch confluentinc refs/pull/5266/head
+git cherry-pick 801a520ec2abf8baee54f769096763398085a6d7 # Fix data race in rd_kafka_broker_fetch_toppars
 ```
