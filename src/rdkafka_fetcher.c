@@ -37,7 +37,6 @@
 #include "rdkafka_offset.h"
 #include "rdkafka_msgset.h"
 #include "rdkafka_fetcher.h"
-#include "rdkafka_partition.h"
 #include "rdkafka_request.h"
 
 
