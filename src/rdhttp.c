@@ -245,7 +245,7 @@ rd_http_error_t *rd_http_parse_json(rd_http_req_t *hreq, cJSON **jsonp) {
         raw_json[len] = '\0';
 
         /* Parse JSON */
-        *jsonp = cJSON_ParseWithOpts(raw_json, &end, 0);
+        *jsonp = kafka_cJSON_ParseWithOpts(raw_json, &end, 0);
 
         if (!*jsonp)
                 herr = rd_http_error_new(hreq->hreq_code,
@@ -401,7 +401,7 @@ rd_http_error_t *rd_http_get_json(const char *url, cJSON **jsonp) {
 
         if (len == 0) {
                 /* Empty response: create empty JSON object */
-                *jsonp = cJSON_CreateObject();
+                *jsonp = kafka_cJSON_CreateObject();
                 rd_http_req_destroy(&hreq);
                 return NULL;
         }
@@ -426,7 +426,7 @@ rd_http_error_t *rd_http_get_json(const char *url, cJSON **jsonp) {
 
         /* Parse JSON */
         end    = NULL;
-        *jsonp = cJSON_ParseWithOpts(raw_json, &end, 0);
+        *jsonp = kafka_cJSON_ParseWithOpts(raw_json, &end, 0);
         if (!*jsonp && !herr)
                 herr = rd_http_error_new(hreq.hreq_code,
                                          "Failed to parse JSON response "
@@ -478,7 +478,7 @@ int unittest_http(void) {
                      base_url, herr->errstr);
 
         empty = rd_true;
-        cJSON_ArrayForEach(jval, json) {
+        kafka_cJSON_ArrayForEach(jval, json) {
                 empty = rd_false;
                 break;
         }
@@ -488,7 +488,7 @@ int unittest_http(void) {
             "URL %s returned no error and a non-empty "
             "JSON object/array as expected",
             base_url);
-        cJSON_Delete(json);
+        kafka_cJSON_Delete(json);
 
 
         /* Try the error URL, verify error code. */
@@ -505,7 +505,7 @@ int unittest_http(void) {
             error_url, herr->code, herr->errstr, json ? "a" : "no");
         /* Check if there's a JSON document returned */
         if (json)
-                cJSON_Delete(json);
+                kafka_cJSON_Delete(json);
         rd_http_error_destroy(herr);
 
         RD_UT_PASS();

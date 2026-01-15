@@ -286,7 +286,7 @@ void rd_kafka_oidc_token_refresh_cb(rd_kafka_t *rk,
                 goto done;
         }
 
-        parsed_token = cJSON_GetObjectItem(json, "access_token");
+        parsed_token = kafka_cJSON_GetObjectItem(json, "access_token");
 
         if (parsed_token == NULL) {
                 rd_kafka_oauthbearer_set_token_failure(
@@ -296,7 +296,7 @@ void rd_kafka_oidc_token_refresh_cb(rd_kafka_t *rk,
                 goto done;
         }
 
-        jwt_token = cJSON_GetStringValue(parsed_token);
+        jwt_token = kafka_cJSON_GetStringValue(parsed_token);
         if (jwt_token == NULL) {
                 rd_kafka_oauthbearer_set_token_failure(
                     rk,
@@ -315,14 +315,14 @@ void rd_kafka_oidc_token_refresh_cb(rd_kafka_t *rk,
                 goto done;
         }
 
-        payloads = cJSON_Parse(decoded_payloads);
+        payloads = kafka_cJSON_Parse(decoded_payloads);
         if (payloads == NULL) {
                 rd_kafka_oauthbearer_set_token_failure(
                     rk, "Failed to parse JSON JWT payload");
                 goto done;
         }
 
-        jwt_exp = cJSON_GetObjectItem(payloads, "exp");
+        jwt_exp = kafka_cJSON_GetObjectItem(payloads, "exp");
         if (jwt_exp == NULL) {
                 rd_kafka_oauthbearer_set_token_failure(
                     rk,
@@ -331,7 +331,7 @@ void rd_kafka_oidc_token_refresh_cb(rd_kafka_t *rk,
                 goto done;
         }
 
-        exp = cJSON_GetNumberValue(jwt_exp);
+        exp = kafka_cJSON_GetNumberValue(jwt_exp);
         if (exp <= 0) {
                 rd_kafka_oauthbearer_set_token_failure(
                     rk,
@@ -340,7 +340,7 @@ void rd_kafka_oidc_token_refresh_cb(rd_kafka_t *rk,
                 goto done;
         }
 
-        jwt_sub = cJSON_GetObjectItem(payloads, "sub");
+        jwt_sub = kafka_cJSON_GetObjectItem(payloads, "sub");
         if (jwt_sub == NULL) {
                 rd_kafka_oauthbearer_set_token_failure(
                     rk,
@@ -349,7 +349,7 @@ void rd_kafka_oidc_token_refresh_cb(rd_kafka_t *rk,
                 goto done;
         }
 
-        sub = cJSON_GetStringValue(jwt_sub);
+        sub = kafka_cJSON_GetStringValue(jwt_sub);
         if (sub == NULL) {
                 rd_kafka_oauthbearer_set_token_failure(
                     rk,
@@ -378,11 +378,11 @@ void rd_kafka_oidc_token_refresh_cb(rd_kafka_t *rk,
 done:
         RD_IF_FREE(decoded_payloads, rd_free);
         RD_IF_FREE(post_fields, rd_free);
-        RD_IF_FREE(json, cJSON_Delete);
+        RD_IF_FREE(json, kafka_cJSON_Delete);
         RD_IF_FREE(headers, curl_slist_free_all);
         RD_IF_FREE(extensions, rd_free);
         RD_IF_FREE(extension_key_value, rd_free);
-        RD_IF_FREE(payloads, cJSON_Delete);
+        RD_IF_FREE(payloads, kafka_cJSON_Delete);
 }
 
 
@@ -446,7 +446,7 @@ static int ut_sasl_oauthbearer_oidc_should_succeed(void) {
 
         RD_UT_ASSERT(json, "Expected non-empty json.");
 
-        parsed_token = cJSON_GetObjectItem(json, "access_token");
+        parsed_token = kafka_cJSON_GetObjectItem(json, "access_token");
 
         RD_UT_ASSERT(parsed_token, "Expected access_token in JSON response.");
         token = parsed_token->valuestring;
@@ -459,7 +459,7 @@ static int ut_sasl_oauthbearer_oidc_should_succeed(void) {
         rd_free(expected_token_value);
         rd_http_error_destroy(herr);
         rd_http_req_destroy(&hreq);
-        cJSON_Delete(json);
+        kafka_cJSON_Delete(json);
 
         RD_UT_PASS();
 }
@@ -498,15 +498,15 @@ static int ut_sasl_oauthbearer_oidc_with_empty_key(void) {
 
         RD_UT_ASSERT(json, "Expected non-empty json.");
 
-        parsed_token = cJSON_GetObjectItem(json, "access_token");
+        parsed_token = kafka_cJSON_GetObjectItem(json, "access_token");
 
         RD_UT_ASSERT(!parsed_token,
                      "Did not expecte access_token in JSON response");
 
         rd_http_req_destroy(&hreq);
         rd_http_error_destroy(herr);
-        cJSON_Delete(json);
-        cJSON_Delete(parsed_token);
+        kafka_cJSON_Delete(json);
+        kafka_cJSON_Delete(parsed_token);
         RD_UT_PASS();
 }
 

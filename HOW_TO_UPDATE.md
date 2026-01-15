@@ -20,6 +20,14 @@ https://github.com/confluentinc/librdkafka/compare/master...ClickHouse:librdkafk
 * https://github.com/confluentinc/librdkafka/pull/5089
 * https://github.com/confluentinc/librdkafka/pull/5266
 
+### ClickHouse-specific fixes for 2.8 (cannot be upstreamed)
+
+* Calling 'kafka_' prefixed versions of cJSON to avoid clashes with aws-c-common's version of cJSON:
+
+    https://github.com/ClickHouse/ClickHouse/pull/94343
+
+    When you upgrade librdkafka, please make sure to search for new or changed calls to cJSON and modify them accordingly.
+
 ### Fixes done earlier
 
 
@@ -107,4 +115,7 @@ git cherry-pick 5c185854404abf506d520042f61818d93d96cc91 # Fix data race in time
 
 git fetch confluentinc refs/pull/5266/head
 git cherry-pick 801a520ec2abf8baee54f769096763398085a6d7 # Fix data race in rd_kafka_broker_fetch_toppars
+
+# Now pick the commit with librdkafka modifications for cJSON referenced here: https://github.com/ClickHouse/ClickHouse/pull/94343
+# Please check for new / changed calls to cJSON and adjust them accordingly
 ```
