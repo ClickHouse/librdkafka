@@ -19,6 +19,7 @@ https://github.com/confluentinc/librdkafka/compare/master...ClickHouse:librdkafk
 * https://github.com/confluentinc/librdkafka/pull/4788
 * https://github.com/confluentinc/librdkafka/pull/5089
 * https://github.com/confluentinc/librdkafka/pull/5266
+* https://github.com/ClickHouse/librdkafka/pull/15 - Fix lock-order-inversion in queue refcount operations (use atomic refcount instead of mutex-protected)
 
 ### ClickHouse-specific fixes for 2.8 (cannot be upstreamed)
 
