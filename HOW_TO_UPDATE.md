@@ -25,11 +25,12 @@ https://github.com/confluentinc/librdkafka/compare/master...ClickHouse:librdkafk
 
 * Fix heap-use-after-free in `rd_kafka_toppar_consumer_lag_tmr_cb`: acquire a
   reference when starting the consumer lag timer (`rd_kafka_toppar_new0`) and
-  release it in `rd_kafka_cgrp_partition_del` (which runs on the same KafkaMain
-  thread as the timer callback, so no callback can be in-flight when the
-  reference is released). Without this, the KafkaBroker thread can free the
-  toppar between the timer capturing its `arg` pointer and the callback
-  actually running.
+  release it in `rd_kafka_cgrp_partition_del` (for cgrp partitions) and in
+  `rd_kafka_topic_partitions_remove` (for all remaining partitions during
+  shutdown). Both release points run on the KafkaMain thread, so no timer
+  callback can be in-flight when the reference is released. Without this, the
+  KafkaBroker thread can free the toppar between the timer capturing its `arg`
+  pointer and the callback actually running.
 
 * Calling 'kafka_' prefixed versions of cJSON to avoid clashes with aws-c-common's version of cJSON:
 
