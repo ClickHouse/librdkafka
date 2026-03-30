@@ -119,8 +119,27 @@ rd_kafka_assign0(rd_kafka_t *rk,
                 rko->rko_u.assign.partitions =
                     rd_kafka_topic_partition_list_copy(partitions);
 
+        /* Use a bounded timeout (30s) instead of RD_POLL_INFINITE.
+         *
+         * rd_kafka_assign() is called from the rebalance callback,
+         * which fires inside rd_kafka_consumer_poll/poll_batch on the
+         * application thread.  It sends an RD_KAFKA_OP_ASSIGN to the
+         * consumer-group background thread and waits for a reply.
+         *
+         * With RD_POLL_INFINITE the wait is unbounded: if the cgrp
+         * thread is blocked (e.g. waiting for a coordinator while the
+         * broker is temporarily unreachable after a pause/unpause
+         * cycle), the application thread hangs inside poll_batch()
+         * for an arbitrarily long time — far exceeding the poll
+         * timeout the caller requested.  This makes it impossible to
+         * cancel or shut down the consumer promptly.
+         *
+         * A 30 s cap is generous enough for any healthy rebalance
+         * while still letting the caller regain control and react to
+         * shutdown signals.  On timeout rd_kafka_op_error_destroy()
+         * returns RD_KAFKA_RESP_ERR__TIMED_OUT. */
         return rd_kafka_op_error_destroy(
-            rd_kafka_op_req(rkcg->rkcg_ops, rko, RD_POLL_INFINITE));
+            rd_kafka_op_req(rkcg->rkcg_ops, rko, 30 * 1000));
 }
 
 
