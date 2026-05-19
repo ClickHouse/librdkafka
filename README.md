@@ -5,5 +5,4 @@
  3. Open a PR in this repo to merge your changes to the latest release branch
  4. Open the upstream PR
  5. Merge the PR in this repo
- 6. In the PR in the ClickHouse repo reference the merged commit and update [contrib/librdkafka-cmake/HOW_TO_UPDTE.md](https://github.com/ClickHouse/ClickHouse/blob/master/contrib/librdkafka-cmake/HOW_TO_UPDTE.md)
-
+ 6. In the PR in the ClickHouse repo reference the merged commit and update [contrib/librdkafka-cmake/HOW_TO_UPDATE.md](https://github.com/ClickHouse/ClickHouse/blob/master/contrib/librdkafka-cmake/HOW_TO_UPDATE.md)
