@@ -36,7 +36,6 @@
 #include "rdkafka_sasl_int.h"
 #include "rdunittest.h"
 #include "cJSON.h"
-#include <curl/curl.h>
 #include "rdhttp.h"
 #include "rdkafka_sasl_oauthbearer_oidc.h"
 #include "rdbase64.h"

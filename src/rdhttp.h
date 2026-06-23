@@ -66,9 +66,12 @@ void rd_http_global_init(void);
 
 
 
-#ifdef LIBCURL_VERSION
-/* Advanced API that exposes the underlying CURL handle.
- * Requires caller to have included curl.h prior to this file. */
+#if WITH_HTTP
+/* Advanced API that exposes the underlying HTTP request handle.
+ * ClickHouse: the HTTP client is implemented on Poco instead of libcurl
+ * (see contrib/librdkafka-cmake/rdhttp_poco.c); the few curl types and
+ * functions still referenced by name are declared in rdhttp_curl_compat.h. */
+#include "rdhttp_curl_compat.h"
 
 
 typedef struct rd_http_req_s {
