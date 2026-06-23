@@ -188,7 +188,7 @@ struct rd_kafka_property {
 #define _UNSUPPORTED_ZSTD .unsupported = "libzstd not available at build time"
 #endif
 
-#if WITH_CURL
+#if WITH_CURL || WITH_HTTP
 #define _UNSUPPORTED_HTTP .unsupported = NULL
 #else
 #define _UNSUPPORTED_HTTP .unsupported = "libcurl not available at build time"
