@@ -77,7 +77,7 @@
 #define CJSON_HIDE_SYMBOLS
 #include "cJSON.h"
 
-#if WITH_CURL
+#if WITH_CURL || WITH_HTTP
 #include "rdhttp.h"
 #endif
 
@@ -196,7 +196,7 @@ static void rd_kafka_global_init0(void) {
 
         kafka_cJSON_InitHooks(&json_hooks);
 
-#if WITH_CURL
+#if WITH_CURL || WITH_HTTP
         rd_http_global_init();
 #endif
 }

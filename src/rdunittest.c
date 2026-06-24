@@ -423,7 +423,7 @@ extern int unittest_scram(void);
 #endif
 extern int unittest_assignors(void);
 extern int unittest_map(void);
-#if WITH_CURL
+#if WITH_CURL || WITH_HTTP
 extern int unittest_http(void);
 #endif
 #if WITH_OAUTHBEARER_OIDC
@@ -471,7 +471,7 @@ int rd_unittest(void) {
             {"scram", unittest_scram},
 #endif
             {"assignors", unittest_assignors},
-#if WITH_CURL
+#if WITH_CURL || WITH_HTTP
             {"http", unittest_http},
 #endif
 #if WITH_OAUTHBEARER_OIDC
