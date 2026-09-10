@@ -2764,14 +2764,14 @@ CJSON_PUBLIC(cJSON *) kafka_cJSON_CreateStringArray(const char *const *strings, 
 }
 
 /* Duplication */
-cJSON * cJSON_Duplicate_rec(const cJSON *item, size_t depth, cJSON_bool recurse);
+cJSON * kafka_cJSON_Duplicate_rec(const cJSON *item, size_t depth, cJSON_bool recurse);
 
 CJSON_PUBLIC(cJSON *) kafka_cJSON_Duplicate(const cJSON *item, cJSON_bool recurse)
 {
-    return cJSON_Duplicate_rec(item, 0, recurse );
+    return kafka_cJSON_Duplicate_rec(item, 0, recurse );
 }
 
-cJSON * cJSON_Duplicate_rec(const cJSON *item, size_t depth, cJSON_bool recurse)
+cJSON * kafka_cJSON_Duplicate_rec(const cJSON *item, size_t depth, cJSON_bool recurse)
 {
     cJSON *newitem = NULL;
     cJSON *child = NULL;
@@ -2821,7 +2821,7 @@ cJSON * cJSON_Duplicate_rec(const cJSON *item, size_t depth, cJSON_bool recurse)
         if(depth >= CJSON_CIRCULAR_LIMIT) {
             goto fail;
         }
-        newchild = cJSON_Duplicate_rec(child, depth + 1, true); /* Duplicate (with recurse) each item in the ->next chain */
+        newchild = kafka_cJSON_Duplicate_rec(child, depth + 1, true); /* Duplicate (with recurse) each item in the ->next chain */
         if (!newchild)
         {
             goto fail;
