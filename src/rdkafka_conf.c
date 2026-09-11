@@ -56,10 +56,6 @@
 #include <windows.h>
 #endif
 
-#if WITH_OAUTHBEARER_OIDC
-#include <curl/curl.h>
-#endif
-
 struct rd_kafka_property {
         rd_kafka_conf_scope_t scope;
         const char *name;
@@ -188,7 +184,7 @@ struct rd_kafka_property {
 #define _UNSUPPORTED_ZSTD .unsupported = "libzstd not available at build time"
 #endif
 
-#if WITH_CURL
+#if WITH_CURL || WITH_HTTP
 #define _UNSUPPORTED_HTTP .unsupported = NULL
 #else
 #define _UNSUPPORTED_HTTP .unsupported = "libcurl not available at build time"
@@ -4274,10 +4270,6 @@ const char *rd_kafka_conf_finalize(rd_kafka_type_t cltype,
                 return "`https.ca.location` must be "
                        "an existing file or directory";
 
-#if !CURL_AT_LEAST_VERSION(7, 77, 0)
-        if (conf->https.ca_pem)
-                return "`https.ca.pem` requires libcurl 7.77.0 or later";
-#endif
 #endif
 
 

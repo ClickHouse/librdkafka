@@ -60,7 +60,7 @@ struct rd_kafka_q_s {
         struct rd_kafka_op_tailq rkq_q; /* TAILQ_HEAD(, rd_kafka_op_s) */
         int rkq_qlen;                   /* Number of entries in queue */
         int64_t rkq_qsize;              /* Size of all entries in queue */
-        int rkq_refcnt;
+        rd_refcnt_t rkq_refcnt;
         int rkq_flags;
 #define RD_KAFKA_Q_F_ALLOCATED 0x1 /* Allocated: rd_free on destroy */
 #define RD_KAFKA_Q_F_READY                                                     \
@@ -155,15 +155,7 @@ void rd_kafka_q_destroy_final(rd_kafka_q_t *rkq);
 #define rd_kafka_q_unlock(rkqu) mtx_unlock(&(rkqu)->rkq_lock)
 
 static RD_INLINE RD_UNUSED rd_kafka_q_t *rd_kafka_q_keep(rd_kafka_q_t *rkq) {
-        mtx_lock(&rkq->rkq_lock);
-        rkq->rkq_refcnt++;
-        mtx_unlock(&rkq->rkq_lock);
-        return rkq;
-}
-
-static RD_INLINE RD_UNUSED rd_kafka_q_t *
-rd_kafka_q_keep_nolock(rd_kafka_q_t *rkq) {
-        rkq->rkq_refcnt++;
+        rd_refcnt_add(&rkq->rkq_refcnt);
         return rkq;
 }
 
@@ -218,7 +210,7 @@ void rd_kafka_q_purge_toppar_version(rd_kafka_q_t *rkq,
  */
 static RD_INLINE RD_UNUSED void rd_kafka_q_destroy0(rd_kafka_q_t *rkq,
                                                     int disable) {
-        int do_delete = 0;
+        int32_t refcnt;
 
         if (disable) {
                 /* To avoid recursive locking (from ops being purged
@@ -229,12 +221,10 @@ static RD_INLINE RD_UNUSED void rd_kafka_q_destroy0(rd_kafka_q_t *rkq,
                 rd_kafka_q_purge0(rkq, 1 /*lock*/);
         }
 
-        mtx_lock(&rkq->rkq_lock);
-        rd_kafka_assert(NULL, rkq->rkq_refcnt > 0);
-        do_delete = !--rkq->rkq_refcnt;
-        mtx_unlock(&rkq->rkq_lock);
+        refcnt = rd_refcnt_sub(&rkq->rkq_refcnt);
+        rd_kafka_assert(NULL, refcnt >= 0);
 
-        if (unlikely(do_delete))
+        if (unlikely(refcnt == 0))
                 rd_kafka_q_destroy_final(rkq);
 }
 
@@ -368,7 +358,7 @@ static RD_INLINE RD_UNUSED void rd_kafka_q_yield(rd_kafka_q_t *rkq) {
 
         mtx_lock(&rkq->rkq_lock);
 
-        rd_dassert(rkq->rkq_refcnt > 0);
+        rd_dassert(rd_refcnt_get(&rkq->rkq_refcnt) > 0);
 
         if (unlikely(!(rkq->rkq_flags & RD_KAFKA_Q_F_READY))) {
                 /* Queue has been disabled */
@@ -435,7 +425,7 @@ static RD_INLINE RD_UNUSED int rd_kafka_q_enq1(rd_kafka_q_t *rkq,
         if (do_lock)
                 mtx_lock(&rkq->rkq_lock);
 
-        rd_dassert(rkq->rkq_refcnt > 0);
+        rd_dassert(rd_refcnt_get(&rkq->rkq_refcnt) > 0);
 
         if (unlikely(!(rkq->rkq_flags & RD_KAFKA_Q_F_READY))) {
                 /* Queue has been disabled, reply to and fail the rko. */
@@ -583,11 +573,20 @@ rd_kafka_q_concat0(rd_kafka_q_t *rkq, rd_kafka_q_t *srcq, int do_lock) {
 
                 rd_kafka_q_mark_served(srcq);
                 rd_kafka_q_reset(srcq);
-        } else
-                r = rd_kafka_q_concat0(rkq->rkq_fwdq ? rkq->rkq_fwdq : rkq,
-                                       srcq, rkq->rkq_fwdq ? do_lock : 0);
-        if (do_lock)
-                mtx_unlock(&rkq->rkq_lock);
+                if (do_lock)
+                        mtx_unlock(&rkq->rkq_lock);
+        } else {
+                /* Queue is being forwarded. To avoid lock-order-inversion
+                 * (potential deadlock), release the current queue's lock
+                 * before locking the forwarded queue.
+                 * Same pattern as rd_kafka_q_enq1(). */
+                rd_kafka_q_t *fwdq = rkq->rkq_fwdq;
+                rd_kafka_q_keep(fwdq);
+                if (do_lock)
+                        mtx_unlock(&rkq->rkq_lock);
+                r = rd_kafka_q_concat0(fwdq, srcq, 1 /*do_lock*/);
+                rd_kafka_q_destroy(fwdq);
+        }
 
         return r;
 }
@@ -622,12 +621,28 @@ rd_kafka_q_prepend0(rd_kafka_q_t *rkq, rd_kafka_q_t *srcq, int do_lock) {
 
                 rd_kafka_q_mark_served(srcq);
                 rd_kafka_q_reset(srcq);
-        } else
-                rd_kafka_q_prepend0(rkq->rkq_fwdq ? rkq->rkq_fwdq : rkq,
+                if (do_lock)
+                        mtx_unlock(&rkq->rkq_lock);
+        } else if (rkq->rkq_fwdq) {
+                /* Destination queue is being forwarded. To avoid
+                 * lock-order-inversion (potential deadlock), release the
+                 * current queue's lock before locking the forwarded queue.
+                 * Same pattern as rd_kafka_q_enq1(). */
+                rd_kafka_q_t *fwdq = rkq->rkq_fwdq;
+                rd_kafka_q_keep(fwdq);
+                if (do_lock)
+                        mtx_unlock(&rkq->rkq_lock);
+                rd_kafka_q_prepend0(fwdq,
                                     srcq->rkq_fwdq ? srcq->rkq_fwdq : srcq,
-                                    rkq->rkq_fwdq ? do_lock : 0);
-        if (do_lock)
-                mtx_unlock(&rkq->rkq_lock);
+                                    1 /*do_lock*/);
+                rd_kafka_q_destroy(fwdq);
+        } else {
+                /* Only source queue is forwarded, no nested locking needed
+                 * since we recurse on the same rkq without re-locking. */
+                rd_kafka_q_prepend0(rkq, srcq->rkq_fwdq, 0 /*already locked*/);
+                if (do_lock)
+                        mtx_unlock(&rkq->rkq_lock);
+        }
 }
 
 #define rd_kafka_q_prepend(dstq, srcq)                                         \
