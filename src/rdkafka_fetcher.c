@@ -56,10 +56,12 @@ static void rd_kafka_broker_fetch_backoff(rd_kafka_broker_t *rkb,
  * @brief Backoff the next Fetch for specific partition
  *
  * @returns the absolute backoff time (the current time for no backoff).
+ *
+ * @locks rd_kafka_toppar_lock() MUST be held.
  */
-static rd_ts_t rd_kafka_toppar_fetch_backoff(rd_kafka_broker_t *rkb,
-                                             rd_kafka_toppar_t *rktp,
-                                             rd_kafka_resp_err_t err) {
+static rd_ts_t rd_kafka_toppar_fetch_backoff0(rd_kafka_broker_t *rkb,
+                                              rd_kafka_toppar_t *rktp,
+                                              rd_kafka_resp_err_t err) {
         int backoff_ms;
 
         /* Don't back off on reaching end of partition */
@@ -92,6 +94,23 @@ static rd_ts_t rd_kafka_toppar_fetch_backoff(rd_kafka_broker_t *rkb,
                    err ? rd_kafka_err2str(err) : "");
 
         return rktp->rktp_ts_fetch_backoff;
+}
+
+/**
+ * @brief Same as rd_kafka_toppar_fetch_backoff0() but takes the toppar lock.
+ *
+ * @locks rd_kafka_toppar_lock() MUST NOT be held.
+ */
+static rd_ts_t rd_kafka_toppar_fetch_backoff(rd_kafka_broker_t *rkb,
+                                             rd_kafka_toppar_t *rktp,
+                                             rd_kafka_resp_err_t err) {
+        rd_ts_t ts_backoff;
+
+        rd_kafka_toppar_lock(rktp);
+        ts_backoff = rd_kafka_toppar_fetch_backoff0(rkb, rktp, err);
+        rd_kafka_toppar_unlock(rktp);
+
+        return ts_backoff;
 }
 
 /**
@@ -3768,14 +3787,14 @@ rd_ts_t rd_kafka_toppar_fetch_decide(rd_kafka_toppar_t *rktp,
                 /* Skip toppars who's local message queue is already above
                  * the lower threshold. */
                 reason     = "queued.min.messages exceeded";
-                ts_backoff = rd_kafka_toppar_fetch_backoff(
+                ts_backoff = rd_kafka_toppar_fetch_backoff0(
                     rkb, rktp, RD_KAFKA_RESP_ERR__QUEUE_FULL);
                 should_fetch = 0;
 
         } else if ((int64_t)rd_kafka_q_size(rktp->rktp_fetchq) >=
                    rkb->rkb_rk->rk_conf.queued_max_msg_bytes) {
                 reason     = "queued.max.messages.kbytes exceeded";
-                ts_backoff = rd_kafka_toppar_fetch_backoff(
+                ts_backoff = rd_kafka_toppar_fetch_backoff0(
                     rkb, rktp, RD_KAFKA_RESP_ERR__QUEUE_FULL);
                 should_fetch = 0;
         }
