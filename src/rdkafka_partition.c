@@ -1427,11 +1427,13 @@ static void rd_kafka_toppar_handle_Offset(rd_kafka_t *rk,
         rd_kafka_topic_partition_list_t *offsets;
         rd_kafka_topic_partition_t *rktpar;
         int actions = 0;
+        int32_t op_version;
 
         rd_kafka_toppar_lock(rktp);
         /* Drop reply from previous partition leader */
         if (err != RD_KAFKA_RESP_ERR__DESTROY && rktp->rktp_leader != rkb)
                 err = RD_KAFKA_RESP_ERR__OUTDATED;
+        op_version = rktp->rktp_op_version;
         rd_kafka_toppar_unlock(rktp);
 
         offsets = rd_kafka_topic_partition_list_new(1);
@@ -1441,11 +1443,11 @@ static void rd_kafka_toppar_handle_Offset(rd_kafka_t *rk,
                    "topic %.*s [%" PRId32 "] (v%d vs v%d)",
                    RD_KAFKAP_STR_PR(rktp->rktp_rkt->rkt_topic),
                    rktp->rktp_partition, request->rkbuf_replyq.version,
-                   rktp->rktp_op_version);
+                   op_version);
 
         rd_dassert(request->rkbuf_replyq.version > 0);
         if (err != RD_KAFKA_RESP_ERR__DESTROY &&
-            rd_kafka_buf_version_outdated(request, rktp->rktp_op_version)) {
+            rd_kafka_buf_version_outdated(request, op_version)) {
                 /* Outdated request response, ignore. */
                 err = RD_KAFKA_RESP_ERR__OUTDATED;
         }
