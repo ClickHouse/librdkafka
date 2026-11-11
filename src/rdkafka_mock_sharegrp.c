@@ -577,7 +577,7 @@ rd_kafka_mock_sharegroup_target_assignment_new(void) {
         target_assignment = rd_calloc(1, sizeof(*target_assignment));
         rd_list_init(&target_assignment->member_ids, 0, rd_free);
         rd_list_init(&target_assignment->assignment, 0,
-                     (void *)rd_kafka_topic_partition_list_destroy);
+                     rd_kafka_topic_partition_list_destroy_free);
 
         return target_assignment;
 }
