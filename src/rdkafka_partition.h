@@ -1088,6 +1088,10 @@ rd_kafka_toppar_ver_destroy(struct rd_kafka_toppar_ver *tver) {
         rd_kafka_toppar_destroy(tver->rktp);
 }
 
+static RD_INLINE RD_UNUSED void rd_kafka_toppar_ver_destroy_free(void *tver) {
+        rd_kafka_toppar_ver_destroy(tver);
+}
+
 
 /**
  * @returns 1 if rko version is outdated, else 0.

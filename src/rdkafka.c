@@ -5569,7 +5569,7 @@ rd_kafka_resp_err_t rd_kafka_query_watermark_offsets(rd_kafka_t *rk,
             rd_kafka_topic_partition_list_add(partitions, topic, partition);
 
         rd_list_init(&leaders, partitions->cnt,
-                     (void *)rd_kafka_partition_leader_destroy);
+                     rd_kafka_partition_leader_destroy_free);
 
         err = rd_kafka_topic_partition_list_query_leaders(rk, partitions,
                                                           &leaders, timeout_ms);
@@ -5749,7 +5749,7 @@ rd_kafka_offsets_for_times(rd_kafka_t *rk,
                 return RD_KAFKA_RESP_ERR__INVALID_ARG;
 
         rd_list_init(&leaders, offsets->cnt,
-                     (void *)rd_kafka_partition_leader_destroy);
+                     rd_kafka_partition_leader_destroy_free);
 
         err = rd_kafka_topic_partition_list_query_leaders(rk, offsets, &leaders,
                                                           timeout_ms);

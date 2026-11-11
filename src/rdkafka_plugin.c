@@ -131,6 +131,10 @@ static void rd_kafka_plugin_destroy(rd_kafka_plugin_t *rkplug) {
         rd_free(rkplug);
 }
 
+static void rd_kafka_plugin_destroy_free(void *rkplug) {
+        rd_kafka_plugin_destroy(rkplug);
+}
+
 
 
 /**
@@ -148,7 +152,7 @@ static rd_kafka_conf_res_t rd_kafka_plugins_conf_set0(rd_kafka_conf_t *conf,
         char *s;
 
         rd_list_destroy(&conf->plugins);
-        rd_list_init(&conf->plugins, 0, (void *)&rd_kafka_plugin_destroy);
+        rd_list_init(&conf->plugins, 0, rd_kafka_plugin_destroy_free);
 
         if (!paths || !*paths)
                 return RD_KAFKA_CONF_OK;

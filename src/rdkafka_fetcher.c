@@ -3471,7 +3471,7 @@ int rd_kafka_broker_fetch_toppars(rd_kafka_broker_t *rkb, rd_ts_t now) {
          * this will later be checked in Fetch response to purge outdated
          * responses (e.g., after a seek). */
         rkbuf->rkbuf_rktp_vers =
-            rd_list_new(0, (void *)rd_kafka_toppar_ver_destroy);
+            rd_list_new(0, rd_kafka_toppar_ver_destroy_free);
         rd_list_prealloc_elems(rkbuf->rkbuf_rktp_vers,
                                sizeof(struct rd_kafka_toppar_ver),
                                rkb->rkb_active_toppar_cnt, 0);

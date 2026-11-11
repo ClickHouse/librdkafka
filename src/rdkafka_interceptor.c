@@ -232,8 +232,7 @@ static void rd_kafka_interceptors_init(rd_kafka_conf_t *conf) {
             ->rl_flags |= RD_LIST_F_UNIQUE;
 
         /* Interceptor config */
-        rd_list_init(&conf->interceptors.config, 0,
-                     (void (*)(void *))rd_strtup_destroy);
+        rd_list_init(&conf->interceptors.config, 0, rd_strtup_free);
 }
 
 

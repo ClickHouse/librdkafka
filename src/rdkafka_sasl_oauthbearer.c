@@ -895,8 +895,7 @@ static int rd_kafka_oauthbearer_unsecured_token0(
 
         memset(token, 0, sizeof(*token));
 
-        rd_list_init(&parsed.extensions, 0,
-                     (void (*)(void *))rd_strtup_destroy);
+        rd_list_init(&parsed.extensions, 0, rd_strtup_free);
 
         if (!(r = parse_ujws_config(cfg, &parsed, errstr, errstr_size))) {
                 /* Make sure we have required and valid info */
@@ -1305,8 +1304,7 @@ static int rd_kafka_sasl_oauthbearer_init(rd_kafka_t *rk,
 
         handle->rk = rk;
 
-        rd_list_init(&handle->extensions, 0,
-                     (void (*)(void *))rd_strtup_destroy);
+        rd_list_init(&handle->extensions, 0, rd_strtup_free);
 
 
         if (rk->rk_conf.sasl.enable_callback_queue) {
