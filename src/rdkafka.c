@@ -2998,28 +2998,15 @@ rd_kafka_t *rd_kafka_new(rd_kafka_type_t type,
         /* Wait for background threads to fully initialize so that
          * the client instance is fully functional at the time it is
          * returned from the constructor. */
-        if (rd_kafka_init_wait(rk, 60 * 1000) != 0) {
+        while (rd_kafka_init_wait(rk, 60 * 1000) != 0) {
                 /* This should never happen unless there is a bug
-                 * or the OS is not scheduling the background threads.
-                 * Either case there is no point in handling this gracefully
-                 * in the current state since the thread joins are likely
-                 * to hang as well. */
+                 * or the OS is not scheduling the background threads. */
                 mtx_lock(&rk->rk_init_lock);
                 rd_kafka_log(rk, LOG_CRIT, "INIT",
-                             "Failed to initialize %s: "
-                             "%d background thread(s) did not initialize "
-                             "within 60 seconds",
-                             rk->rk_name, rk->rk_init_wait_cnt);
-                if (errstr)
-                        rd_snprintf(errstr, errstr_size,
-                                    "Timed out waiting for "
-                                    "%d background thread(s) to initialize",
-                                    rk->rk_init_wait_cnt);
+                             "Still waiting for %d background thread(s) "
+                             "of %s to initialize",
+                             rk->rk_init_wait_cnt, rk->rk_name);
                 mtx_unlock(&rk->rk_init_lock);
-
-                rd_kafka_set_last_error(RD_KAFKA_RESP_ERR__CRIT_SYS_RESOURCE,
-                                        EDEADLK);
-                return NULL;
         }
 
         rk->rk_initialized = 1;
