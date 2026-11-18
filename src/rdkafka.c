@@ -3000,7 +3000,17 @@ rd_kafka_t *rd_kafka_new(rd_kafka_type_t type,
          * returned from the constructor. */
         while (rd_kafka_init_wait(rk, 60 * 1000) != 0) {
                 /* This should never happen unless there is a bug
-                 * or the OS is not scheduling the background threads. */
+                 * or the OS is not scheduling the background threads.
+                 * Either case there is no point in handling this gracefully
+                 * in the current state since the thread joins are likely
+                 * to hang as well. But it is also unsafe to return NULL
+                 * to our caller, since that would indicate that we have
+                 * "successfully failed" and invite the caller to destroy
+                 * app_conf and the callbacks it holds. But the background
+                 * threads will try to use those callbacks as soon as they
+                 * wake up. So we must not return NULL, either. Just keep
+                 * looping, since that is the only safe behavior in this
+                 * unlikely case. */
                 mtx_lock(&rk->rk_init_lock);
                 rd_kafka_log(rk, LOG_CRIT, "INIT",
                              "Still waiting for %d background thread(s) "
